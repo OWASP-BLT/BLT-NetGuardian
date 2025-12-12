@@ -1,0 +1,23 @@
+{
+  "name": "blt-netguardian-worker",
+  "version": "1.0.0",
+  "description": "Cloudflare Worker backend for BLT-NetGuardian",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail"
+  },
+  "keywords": [
+    "cloudflare",
+    "worker",
+    "security",
+    "owasp",
+    "blt"
+  ],
+  "author": "OWASP BLT",
+  "license": "MIT",
+  "devDependencies": {
+    "wrangler": "^3.0.0"
+  }
+}

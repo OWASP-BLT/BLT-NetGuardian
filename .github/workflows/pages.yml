@@ -1,0 +1,24 @@
+# This workflow is for documentation purposes
+# GitHub Pages is configured to deploy from the repository directly
+# This file is not required for deployment but documents the Pages setup
+
+name: GitHub Pages Documentation
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  info:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Repository Info
+        run: |
+          echo "GitHub Pages is configured to deploy from the repository root"
+          echo "Frontend files: index.html, styles.css, app.js"
+          echo "To enable: Go to Settings → Pages → Source: Deploy from branch (main, root)"
+          echo "Access the site at: https://owasp-blt.github.io/BLT-NetGuardian/"
