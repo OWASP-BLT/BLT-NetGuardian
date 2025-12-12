@@ -6,8 +6,10 @@
  */
 
 // CORS headers for cross-origin requests from GitHub Pages
+// NOTE: Update the origin to match your GitHub Pages domain in production
+// Example: 'https://owasp-blt.github.io'
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Origin': '*', // TODO: Restrict to specific domain in production
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
 };
@@ -90,7 +92,7 @@ async function handleCreateAlert(request) {
 
     // In a real implementation, this would save to a database
     const newAlert = {
-      id: Date.now(),
+      id: crypto.randomUUID(),
       severity: body.severity || 'medium',
       type: body.type,
       message: body.message,
