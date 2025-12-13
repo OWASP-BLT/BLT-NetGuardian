@@ -104,9 +104,13 @@ async def handle_create_alert(request):
             'success': True,
             'alert': new_alert
         }, 201)
-    except (json.JSONDecodeError, Exception):
+    except json.JSONDecodeError:
         return create_response({
             'error': 'Invalid JSON body'
+        }, 400)
+    except (KeyError, TypeError) as e:
+        return create_response({
+            'error': 'Missing required fields: type and message'
         }, 400)
 
 
@@ -129,11 +133,10 @@ async def handle_request(request):
     """Main request handler"""
     url = request.url
     # Parse URL to get pathname
-    path = url.split('/', 3)[3] if len(url.split('/', 3)) > 3 else ''
-    if path and not path.startswith('/'):
+    url_parts = url.split('/', 3)
+    path = '/' + url_parts[3] if len(url_parts) > 3 else '/'
+    if not path.startswith('/'):
         path = '/' + path
-    if not path:
-        path = '/'
     
     method = request.method
     
