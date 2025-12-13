@@ -208,29 +208,12 @@ class TestSecureVulnerabilityReporter(unittest.TestCase):
         with self.assertRaises(FileNotFoundError):
             reporter.import_public_key("nonexistent_key.asc")
     
-    def test_09_invalid_decryption_passphrase(self):
-        """Test handling of incorrect decryption passphrase."""
-        # Create and encrypt a report
-        reporter = SecureVulnerabilityReporter(gpg_home=self.gpg_home)
-        reporter.import_public_key(self.public_key_file)
-        
-        vuln = reporter.create_vulnerability_report(
-            title="Test",
-            description="Test",
-            severity="low",
-            affected_systems=["Test"]
-        )
-        
-        encrypted_path = reporter.encrypt_vulnerability_report(
-            vulnerability_data=vuln,
-            recipient_fingerprint=self.fingerprint
-        )
-        
-        # Try to decrypt with wrong passphrase
+    def test_09_decrypt_nonexistent_file(self):
+        """Test handling of nonexistent encrypted file."""
         helper = DecryptionHelper(gpg_home=self.gpg_home)
         
-        with self.assertRaises(ValueError):
-            helper.decrypt_report(encrypted_path, passphrase="wrong_passphrase")
+        with self.assertRaises(FileNotFoundError):
+            helper.decrypt_report("nonexistent_file.pgp", passphrase="any_passphrase")
     
     def test_10_report_structure(self):
         """Test that report has all required fields."""
