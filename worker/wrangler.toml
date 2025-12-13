@@ -1,6 +1,7 @@
 name = "blt-netguardian-api"
-main = "src/index.js"
+main = "src/index.py"
 compatibility_date = "2024-01-01"
+compatibility_flags = ["python_workers"]
 
 # Uncomment and configure for custom domain
 # routes = [

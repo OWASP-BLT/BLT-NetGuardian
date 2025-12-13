@@ -6,22 +6,21 @@ This guide walks you through deploying BLT-NetGuardian's frontend and backend.
 
 - GitHub account with repository access
 - Cloudflare account (free tier is sufficient)
-- Node.js v16+ installed locally
+- Node.js v16+ installed locally (for Wrangler CLI)
 - Git installed locally
 
-## Part 1: Deploy the Backend (Cloudflare Worker)
+## Part 1: Deploy the Backend (Cloudflare Python Worker)
 
 ### Step 1: Install Wrangler CLI
 
 ```bash
-cd worker
-npm install
+npm install -g wrangler
 ```
 
 ### Step 2: Login to Cloudflare
 
 ```bash
-npx wrangler login
+wrangler login
 ```
 
 This will open a browser window for authentication.
@@ -29,7 +28,8 @@ This will open a browser window for authentication.
 ### Step 3: Deploy the Worker
 
 ```bash
-npm run deploy
+cd worker
+wrangler deploy
 ```
 
 You'll see output like:
@@ -110,7 +110,7 @@ Your site is published at https://owasp-blt.github.io/BLT-NetGuardian/
    Value: owasp-blt.github.io
    ```
 
-### For Cloudflare Worker
+### For Cloudflare Python Worker
 
 1. Edit `worker/wrangler.toml`
 2. Uncomment and configure the routes section:
@@ -119,7 +119,7 @@ Your site is published at https://owasp-blt.github.io/BLT-NetGuardian/
      { pattern = "api.yourdomain.com/*", zone_name = "yourdomain.com" }
    ]
    ```
-3. Deploy again: `npm run deploy`
+3. Deploy again: `wrangler deploy`
 
 ## Troubleshooting
 
@@ -134,10 +134,10 @@ Your site is published at https://owasp-blt.github.io/BLT-NetGuardian/
 ### Backend Issues
 
 **Problem**: Worker deployment fails
-- **Solution**: Ensure you're logged in with `npx wrangler login`
+- **Solution**: Ensure you're logged in with `wrangler login`
 
 **Problem**: CORS errors in browser console
-- **Solution**: Verify the worker is deployed and the URL is correct. Check that CORS headers are properly set in `worker/src/index.js`
+- **Solution**: Verify the worker is deployed and the URL is correct. Check that CORS headers are properly set in `worker/src/index.py`
 
 **Problem**: 404 errors on API calls
 - **Solution**: Check that the endpoint paths match between frontend and backend
@@ -158,12 +158,12 @@ Before going to production:
 
 ## Monitoring
 
-### Cloudflare Worker Logs
+### Cloudflare Python Worker Logs
 
 View real-time logs:
 ```bash
 cd worker
-npm run tail
+wrangler tail
 ```
 
 ### GitHub Pages Status
@@ -182,8 +182,8 @@ Check deployment status:
 
 ### Update Backend
 
-1. Make changes to worker code
-2. Run `npm run deploy` from the worker directory
+1. Make changes to worker code in `worker/src/index.py`
+2. Run `wrangler deploy` from the worker directory
 3. No frontend changes needed (same URL)
 
 ## Cost Estimates

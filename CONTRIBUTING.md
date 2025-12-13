@@ -30,20 +30,20 @@ Navigate to `http://localhost:8000` in your browser.
 
 ### Backend Development
 
-The backend is a Cloudflare Worker. To develop locally:
+The backend is a Cloudflare Python Worker. To develop locally:
 
 ```bash
 cd worker
-npm install
-npm run dev
+wrangler dev
 ```
 
 This starts a local development server at `http://localhost:8787`.
 
 ## Code Style
 
-- Use consistent indentation (2 spaces for JavaScript, HTML, CSS)
+- Use consistent indentation (2 spaces for JavaScript, HTML, CSS; 4 spaces for Python)
 - Follow existing code patterns in the repository
+- Follow PEP 8 style guide for Python code
 - Add comments for complex logic
 - Keep functions small and focused
 

@@ -7,15 +7,16 @@ A network security monitoring and threat detection tool built with a GitHub Page
 This project uses a modern, serverless architecture:
 
 - **Frontend**: Static website hosted on GitHub Pages (HTML, CSS, JavaScript)
-- **Backend**: Cloudflare Worker handling API requests
+- **Backend**: Cloudflare Python Worker handling API requests
 
 ## Features
 
 - 🔍 Real-time network monitoring
 - 🚨 Threat detection and alerting
 - 📊 Security analytics dashboard
-- ⚡ Fast, serverless backend with Cloudflare Workers
+- ⚡ Fast, serverless backend with Cloudflare Python Workers
 - 🌐 Static frontend hosted on GitHub Pages
+- 🐍 Python-based API for easy customization
 
 ## Quick Start
 
@@ -31,26 +32,26 @@ The frontend is automatically deployed via GitHub Pages. To view it:
 
 The site will be available at: `https://owasp-blt.github.io/BLT-NetGuardian/`
 
-### Backend (Cloudflare Worker)
+### Backend (Cloudflare Python Worker)
 
 1. Navigate to the worker directory:
    ```bash
    cd worker
    ```
 
-2. Install dependencies:
+2. Install Wrangler CLI globally (if not already installed):
    ```bash
-   npm install
+   npm install -g wrangler
    ```
 
 3. Login to Cloudflare:
    ```bash
-   npx wrangler login
+   wrangler login
    ```
 
 4. Deploy the worker:
    ```bash
-   npm run deploy
+   wrangler deploy
    ```
 
 5. Copy the deployment URL (e.g., `https://blt-netguardian-api.your-subdomain.workers.dev`)
@@ -75,7 +76,7 @@ npx serve
 **Backend**: Run the worker locally:
 ```bash
 cd worker
-npm run dev
+wrangler dev
 ```
 
 ### API Endpoints
@@ -108,7 +109,7 @@ Edit `worker/wrangler.toml` to configure:
 ### Automatic Deployment
 
 1. **GitHub Pages**: Automatically deploys on push to main branch
-2. **Cloudflare Worker**: Use `npm run deploy` in the worker directory
+2. **Cloudflare Python Worker**: Use `wrangler deploy` in the worker directory
 
 ### Manual Deployment
 
@@ -116,10 +117,10 @@ Edit `worker/wrangler.toml` to configure:
 - Enabled in repository settings
 - Deploys from root directory of main branch
 
-**Cloudflare Worker**:
+**Cloudflare Python Worker**:
 ```bash
 cd worker
-npm run deploy
+wrangler deploy
 ```
 
 ## Project Structure
@@ -129,10 +130,10 @@ BLT-NetGuardian/
 ├── index.html          # Main HTML page
 ├── styles.css          # Styling
 ├── app.js              # Frontend JavaScript
-├── worker/             # Cloudflare Worker backend
+├── worker/             # Cloudflare Python Worker backend
 │   ├── src/
-│   │   └── index.js    # Worker code
-│   ├── package.json    # Worker dependencies
+│   │   └── index.py    # Python Worker code
+│   ├── requirements.txt # Python dependencies
 │   ├── wrangler.toml   # Worker configuration
 │   └── README.md       # Worker documentation
 ├── .gitignore

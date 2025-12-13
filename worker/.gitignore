@@ -1,0 +1,6 @@
+blt-netguardian-worker-py/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python

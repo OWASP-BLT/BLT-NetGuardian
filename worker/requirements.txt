@@ -1,0 +1,2 @@
+# No external dependencies required for Cloudflare Python Workers
+# The worker uses the built-in Cloudflare Python runtime

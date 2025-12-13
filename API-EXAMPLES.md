@@ -1,10 +1,10 @@
 # API Examples
 
-This document provides examples of using the BLT-NetGuardian API.
+This document provides examples of using the BLT-NetGuardian API (Python Worker).
 
 ## Base URL
 
-Replace `YOUR_WORKER_URL` with your deployed Cloudflare Worker URL:
+Replace `YOUR_WORKER_URL` with your deployed Cloudflare Python Worker URL:
 ```
 https://blt-netguardian-api.your-subdomain.workers.dev
 ```
