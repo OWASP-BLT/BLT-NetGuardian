@@ -91,6 +91,40 @@ class SecureVulnerabilityReporter:
         """
         return self.gpg.list_keys()
     
+    def verify_key_fingerprint(self, expected_fingerprint: str) -> bool:
+        """
+        Verify that a key with the expected fingerprint exists in the keyring.
+        
+        This should be used to verify the company's public key fingerprint
+        against a known-good value obtained through an out-of-band channel.
+        
+        Args:
+            expected_fingerprint: The expected fingerprint (with or without spaces)
+            
+        Returns:
+            True if a key with the expected fingerprint exists, False otherwise
+            
+        Example:
+            >>> reporter = SecureVulnerabilityReporter()
+            >>> reporter.import_public_key('company_public_key.asc')
+            >>> # Verify fingerprint from company's website
+            >>> if reporter.verify_key_fingerprint('ABCD 1234 EFGH 5678...'):
+            ...     print("Key verified!")
+            ... else:
+            ...     print("WARNING: Key fingerprint mismatch!")
+        """
+        # Normalize fingerprint (remove spaces and convert to uppercase)
+        expected_fp = expected_fingerprint.replace(' ', '').upper()
+        
+        # Check all keys in keyring
+        keys = self.gpg.list_keys()
+        for key in keys:
+            key_fp = key['fingerprint'].replace(' ', '').upper()
+            if key_fp == expected_fp:
+                return True
+        
+        return False
+    
     def encrypt_vulnerability_report(
         self, 
         vulnerability_data: Dict[str, Any],
@@ -125,6 +159,10 @@ class SecureVulnerabilityReporter:
             report_json,
             recipient_fingerprint,
             always_trust=True,  # Trust the imported public key
+            # NOTE: This bypasses GPG's trust model. It is critical that the
+            # public key is verified through an out-of-band channel (e.g.,
+            # fingerprint verification via website, phone, or in-person) before
+            # importing to prevent public key substitution attacks.
             armor=True  # Use ASCII-armored output
         )
         
@@ -198,13 +236,21 @@ class SecureVulnerabilityReporter:
         """
         Send the encrypted report via email.
         
+        SECURITY NOTE: This function accepts passwords as plain text parameters.
+        For production use:
+        - Use app-specific passwords instead of account passwords
+        - Consider OAuth tokens where supported (e.g., Gmail OAuth2)
+        - Store credentials in secure credential managers or environment variables
+        - Never hardcode passwords in source code
+        - Use secrets management systems (AWS Secrets Manager, HashiCorp Vault, etc.)
+        
         Args:
             encrypted_report_path: Path to the encrypted report file
             recipient_email: Email address of the recipient
             smtp_server: SMTP server address
             smtp_port: SMTP server port
             sender_email: Sender's email address
-            sender_password: Sender's email password
+            sender_password: Sender's email password or app-specific password
             use_tls: Whether to use TLS (default: True)
             
         Returns:
@@ -262,8 +308,18 @@ For questions or issues, please contact your security team.
             
             return True
         
+        except FileNotFoundError as e:
+            print(f"Failed to send email: Attachment file not found")
+            return False
+        except smtplib.SMTPAuthenticationError:
+            print(f"Failed to send email: Authentication failed")
+            return False
+        except smtplib.SMTPException as e:
+            print(f"Failed to send email: SMTP error occurred")
+            return False
         except Exception as e:
-            print(f"Failed to send email: {str(e)}")
+            # Generic error without exposing sensitive details
+            print(f"Failed to send email: An error occurred")
             return False
 
 

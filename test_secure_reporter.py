@@ -26,11 +26,14 @@ class TestSecureVulnerabilityReporter(unittest.TestCase):
         cls.gpg_home = tempfile.mkdtemp(prefix='gpg_test_')
         
         # Generate test key pair
+        # WARNING: This uses a test passphrase for testing purposes only.
+        # NEVER use these test keys or passphrases in production!
         print("\nGenerating test key pair...")
+        print("WARNING: Using test credentials - NOT FOR PRODUCTION USE")
         cls.key_result = generate_key_pair(
             name="Test User",
             email="test@example.com",
-            passphrase="test_passphrase_12345",
+            passphrase="test_passphrase_12345",  # TEST ONLY - use strong passphrases in production
             key_length=2048,  # Smaller for faster tests
             gpg_home=cls.gpg_home
         )

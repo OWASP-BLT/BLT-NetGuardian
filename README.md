@@ -125,6 +125,23 @@ Or use the example script:
 python example_bot_report.py
 ```
 
+**⚠️ CRITICAL SECURITY STEP: Verify Public Key Fingerprint**
+
+Before encrypting any vulnerability reports, you MUST verify the company's public key fingerprint through an out-of-band channel to prevent public key substitution attacks:
+
+```bash
+# Check the fingerprint of the imported key
+gpg --fingerprint security@company.com
+
+# Verify this matches the fingerprint published by the company:
+# - On their official website (via HTTPS)
+# - Via direct communication (phone, in-person)
+# - On their key server profile
+# - Through their security.txt file
+```
+
+Never trust a public key without verification!
+
 #### For Companies: Decrypt Reports
 
 ```bash

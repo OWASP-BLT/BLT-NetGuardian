@@ -29,6 +29,19 @@ def main():
             print("Aborted.")
             return
     
+    # Check for weak patterns
+    if (passphrase.lower() in ['password', 'passphrase', '1234567890123456'] or
+        len(set(passphrase)) < 8):  # Too few unique characters
+        print("WARNING: Passphrase appears weak (common word or repeated characters)")
+        print("Strong passphrases should contain:")
+        print("  - Mix of uppercase and lowercase letters")
+        print("  - Numbers and special characters")
+        print("  - No dictionary words or common patterns")
+        confirm = input("Continue anyway? (yes/no): ")
+        if confirm.lower() != 'yes':
+            print("Aborted.")
+            return
+    
     print("\nGenerating 4096-bit RSA key pair...")
     print("This may take a minute...\n")
     
