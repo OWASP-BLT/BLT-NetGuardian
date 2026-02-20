@@ -4,8 +4,9 @@ Workers-compatible Zero-Trust Vulnerability Reporter
 The original secure_reporter.py used python-gnupg which needs GPG
 binaries and filesystem access. Cloudflare Workers has neither.
 This uses Web Crypto API instead - no dependencies, runs in Workers.
+Uses hybrid encryption: AES-256-GCM for payload, RSA-OAEP for key.
 
-Author: Jashwanth (OWASP BLT-NetGuardian contributor)
+Author: Jashwanth 
 """
 import json
 import hashlib
@@ -19,7 +20,10 @@ def validate_severity(severity: str) -> str:
     """Normalize and validate severity level."""
     normalized = severity.lower().strip()
     if normalized not in VALID_SEVERITIES:
-        raise ValueError(f"Invalid severity '{severity}'. Must be one of: {VALID_SEVERITIES}")
+        raise ValueError(
+            f"Invalid severity '{severity}'. "
+            f"Must be one of: {VALID_SEVERITIES}"
+        )
     return normalized
 
 
@@ -47,8 +51,7 @@ def validate_jwk_public_key(jwk: dict) -> bool:
     """Check that a JWK public key has the required RSA-OAEP fields."""
     if not isinstance(jwk, dict):
         return False
-    required = {"kty", "n", "e"}
-    if not required.issubset(jwk.keys()):
+    if not {"kty", "n", "e"}.issubset(jwk.keys()):
         return False
     if jwk.get("kty") != "RSA":
         return False
@@ -60,22 +63,26 @@ def prepare_payload(report: dict) -> str:
     return json.dumps(report, separators=(',', ':'))
 
 
-def build_submission(encrypted_data: str, org_id: str, key_fingerprint: str) -> dict:
+def build_submission(encrypted_key: str, encrypted_payload: str,
+                     iv: str, org_id: str) -> dict:
     """
-    Build the final submission after encryption.
-    Only metadata is stored - encrypted payload goes to the org.
+    Build submission with minimal plaintext metadata.
+    org_id is hashed before storage to prevent enumeration.
+    Only stores what is strictly needed for routing.
     """
-    submission_id = hashlib.sha256(
-        (org_id + encrypted_data[:32]).encode()
-    ).hexdigest()[:16]
+    # Hash org_id - never store it in plaintext
+    org_id_hash = hashlib.sha256(org_id.encode()).hexdigest()[:16]
 
     return {
-        "submission_id": submission_id,
-        "org_id": org_id,
-        "key_fingerprint": key_fingerprint,
-        "encrypted_payload": encrypted_data,
+        "submission_id": hashlib.sha256(
+            (org_id_hash + encrypted_payload[:32]).encode()
+        ).hexdigest()[:16],
+        "org_id_hash": org_id_hash,
+        "encrypted_key": encrypted_key,
+        "encrypted_payload": encrypted_payload,
+        "iv": iv,
         "submitted_at": datetime.utcnow().isoformat() + "Z",
-        "encryption_method": "RSA-OAEP-256"
+        "encryption_method": "AES-256-GCM + RSA-OAEP-256"
     }
 
 
