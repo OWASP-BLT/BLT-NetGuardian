@@ -1,23 +1,22 @@
-/**
- * crypto-reporter.js
- *
- * Workers-compatible encryption for NetGuardian vulnerability reports.
- * Uses SubtleCrypto (Web Crypto API) - works in Cloudflare Workers
- * and modern browsers with zero external dependencies.
- *
- * Uses hybrid encryption:
- * - AES-256-GCM encrypts the report (no size limit)
- * - RSA-OAEP encrypts the AES key (safe for RSA size constraints)
- *
- * Replaces GPG-based approach from draft PR #3 which couldn't
- * run in the Cloudflare Workers runtime environment.
- */
-
 const CryptoReporter = {
 
-    // Encrypt a report using hybrid AES-256-GCM + RSA-OAEP
-    // Solves RSA size limitation - report can be any size
-    async encryptReport(reportData, jwkPublicKey) {
+    validateJWK(jwk) {
+        if (!jwk || typeof jwk !== 'object') return false;
+        if (jwk.kty !== 'RSA') return false;
+        if (!jwk.n || !jwk.e) return false;
+        if (jwk.key_ops && !jwk.key_ops.includes('encrypt')) return false;
+        return true;
+    },
+
+    async hashOrgId(org_id) {
+        const encoded = new TextEncoder().encode(org_id);
+        const hashBuffer = await crypto.subtle.digest('SHA-256', encoded);
+        return Array.from(new Uint8Array(hashBuffer))
+            .map(b => b.toString(16).padStart(2, '0'))
+            .join('');
+    },
+
+    async encryptReport(reportData, jwkPublicKey, org_id) {
         if (!reportData?.data?.title || !reportData?.data?.severity) {
             return {
                 success: false,
@@ -25,44 +24,56 @@ const CryptoReporter = {
             };
         }
 
+        if (!this.validateJWK(jwkPublicKey)) {
+            return {
+                success: false,
+                error: 'Invalid or malformed JWK public key'
+            };
+        }
+
         try {
-            // Step 1: Generate a random AES-256-GCM key for this report
-            const aesKey = await crypto.subtle.generateKey(
-                { name: 'AES-GCM', length: 256 },
-                true,
-                ['encrypt', 'decrypt']
-            );
-
-            // Step 2: Encrypt the report with AES-GCM (no size limit)
-            const iv = crypto.getRandomValues(new Uint8Array(12));
-            const encoded = new TextEncoder().encode(JSON.stringify(reportData));
-            const encryptedReport = await crypto.subtle.encrypt(
-                { name: 'AES-GCM', iv },
-                aesKey,
-                encoded
-            );
-
-            // Step 3: Export AES key then encrypt it with RSA-OAEP
-            const rawAesKey = await crypto.subtle.exportKey('raw', aesKey);
-            const publicKey = await crypto.subtle.importKey(
+            const rsaPublicKey = await crypto.subtle.importKey(
                 'jwk',
                 jwkPublicKey,
                 { name: 'RSA-OAEP', hash: 'SHA-256' },
                 false,
+                ['wrapKey']
+            );
+
+            const aesKey = await crypto.subtle.generateKey(
+                { name: 'AES-GCM', length: 256 },
+                false, 
                 ['encrypt']
             );
-            const encryptedAesKey = await crypto.subtle.encrypt(
-                { name: 'RSA-OAEP' },
-                publicKey,
-                rawAesKey
+
+            const iv = crypto.getRandomValues(new Uint8Array(12));
+            const orgIdHash = await this.hashOrgId(org_id);
+            const additionalData = new TextEncoder().encode(orgIdHash);
+            const encoded = new TextEncoder().encode(JSON.stringify(reportData));
+            const encryptedData = await crypto.subtle.encrypt(
+                {
+                    name: 'AES-GCM',
+                    iv: iv,
+                    additionalData: additionalData  
+                },
+                aesKey,
+                encoded
+            );
+
+            const wrappedAesKey = await crypto.subtle.wrapKey(
+                'raw',
+                aesKey,
+                rsaPublicKey,
+                { name: 'RSA-OAEP' }
             );
 
             return {
                 success: true,
-                encrypted_key: this.toBase64(encryptedAesKey),
-                encrypted_payload: this.toBase64(encryptedReport),
+                encrypted_payload: this.toBase64(encryptedData),
+                wrapped_key: this.toBase64(wrappedAesKey),
                 iv: this.toBase64(iv),
-                encryption_method: 'AES-256-GCM + RSA-OAEP-256',
+                org_id_hash: orgIdHash,
+                encryption_method: 'AES-GCM-256 + RSA-OAEP wrapped key',
                 timestamp: new Date().toISOString()
             };
 
@@ -71,38 +82,36 @@ const CryptoReporter = {
         }
     },
 
-    // Decrypt a received report using the org's private key
-    async decryptReport(encryptedData, jwkPrivateKey) {
+    async decryptReport(encryptedPayload, wrappedKey, iv, orgIdHash, jwkPrivateKey) {
         try {
-            // Step 1: Decrypt the AES key using RSA private key
-            const privateKey = await crypto.subtle.importKey(
+            const rsaPrivateKey = await crypto.subtle.importKey(
                 'jwk',
                 jwkPrivateKey,
                 { name: 'RSA-OAEP', hash: 'SHA-256' },
                 false,
-                ['decrypt']
+                ['unwrapKey']
             );
 
-            const rawAesKey = await crypto.subtle.decrypt(
-                { name: 'RSA-OAEP' },
-                privateKey,
-                this.fromBase64(encryptedData.encrypted_key)
-            );
-
-            // Step 2: Import the decrypted AES key
-            const aesKey = await crypto.subtle.importKey(
+            const aesKey = await crypto.subtle.unwrapKey(
                 'raw',
-                rawAesKey,
-                { name: 'AES-GCM' },
+                this.fromBase64(wrappedKey),
+                rsaPrivateKey,
+                { name: 'RSA-OAEP' },
+                { name: 'AES-GCM', length: 256 },
                 false,
                 ['decrypt']
             );
 
-            // Step 3: Decrypt the actual report
+            const additionalData = new TextEncoder().encode(orgIdHash);
+
             const decrypted = await crypto.subtle.decrypt(
-                { name: 'AES-GCM', iv: this.fromBase64(encryptedData.iv) },
+                {
+                    name: 'AES-GCM',
+                    iv: this.fromBase64(iv),
+                    additionalData: additionalData
+                },
                 aesKey,
-                this.fromBase64(encryptedData.encrypted_payload)
+                this.fromBase64(encryptedPayload)
             );
 
             return {
@@ -115,8 +124,6 @@ const CryptoReporter = {
         }
     },
 
-    // Generate a new RSA key pair for an organization
-    // Upload public_key to NetGuardian, keep private_key secret
     async generateOrgKeyPair() {
         const keyPair = await crypto.subtle.generateKey(
             {
@@ -126,7 +133,7 @@ const CryptoReporter = {
                 hash: 'SHA-256'
             },
             true,
-            ['encrypt', 'decrypt']
+            ['wrapKey', 'unwrapKey']
         );
 
         return {
@@ -135,7 +142,6 @@ const CryptoReporter = {
         };
     },
 
-    // Get SHA-256 fingerprint of a public key for verification
     async getKeyFingerprint(jwkPublicKey) {
         const encoded = new TextEncoder().encode(JSON.stringify(jwkPublicKey));
         const hashBuffer = await crypto.subtle.digest('SHA-256', encoded);
