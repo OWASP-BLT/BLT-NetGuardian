@@ -25,7 +25,7 @@ def validate_severity(severity: str) -> str:
 def validate_jwk_public_key(jwk: dict) -> bool:
     """
     Validate JWK public key has required RSA-OAEP fields.
-    Rejects malformed or unsafe keys before processing.
+    Rejects malformed keys and accidentally submitted private keys.
     """
     if not isinstance(jwk, dict):
         return False
@@ -41,7 +41,7 @@ def validate_jwk_public_key(jwk: dict) -> bool:
 def hash_org_id(org_id: str) -> str:
     """
     Hash org_id using full SHA-256.
-    Never store plaintext org_id as KV key.
+    Never store plaintext org_id as database key.
     """
     return hashlib.sha256(org_id.encode()).hexdigest()
 
@@ -88,51 +88,54 @@ def build_submission(
     org_id is hashed before storage - never stored plaintext.
     submission_id uses UUID for guaranteed uniqueness.
     """
-    org_id_hash = hash_org_id(org_id)
-
     return {
-        "submission_id": str(uuid.uuid4()),  
-        "org_id_hash": org_id_hash,          
+        "submission_id": str(uuid.uuid4()),
+        "org_id_hash": hash_org_id(org_id),
         "key_fingerprint": key_fingerprint,
         "encrypted_payload": encrypted_data,
         "submitted_at": datetime.utcnow().isoformat() + "Z",
         "encryption_method": "AES-GCM-256 + RSA-OAEP wrapped key"
     }
 
-
-async def store_org_key(kv_store, org_id: str, jwk: dict) -> bool:
+async def store_org_key(db, org_id: str, jwk: dict) -> bool:
     """
-    Store org's JWK public key in Cloudflare KV.
-    KV key uses hashed org_id - never plaintext.
+    Store org's JWK public key in Cloudflare D1.
+    Uses hashed org_id - never stores plaintext org_id.
     """
     if not validate_jwk_public_key(jwk):
         raise ValueError("Invalid or malformed JWK public key")
 
     org_id_hash = hash_org_id(org_id)
 
-    await kv_store.put(
-        f"org_key:{org_id_hash}",   
-        json.dumps({
-            "org_id_hash": org_id_hash,
-            "jwk": jwk,
-            "registered_at": datetime.utcnow().isoformat() + "Z"
-        }),
-        expiration_ttl=365 * 24 * 3600
-    )
+    await db.prepare(
+        """INSERT INTO org_keys (org_id_hash, jwk, registered_at)
+           VALUES (?, ?, ?)
+           ON CONFLICT(org_id_hash) DO UPDATE SET
+           jwk=excluded.jwk,
+           registered_at=excluded.registered_at"""
+    ).bind(
+        org_id_hash,
+        json.dumps(jwk),
+        datetime.utcnow().isoformat() + "Z"
+    ).run()
     return True
 
 
-async def get_org_key(kv_store, org_id: str) -> dict:
-    """Retrieve org's public key from KV using hashed org_id."""
+async def get_org_key(db, org_id: str) -> dict:
+    """Retrieve org's public key from D1 using hashed org_id."""
     org_id_hash = hash_org_id(org_id)
-    result = await kv_store.get(f"org_key:{org_id_hash}")
-    if not result:
-        raise KeyError(f"No public key found for org")
-    return json.loads(result)
+    row = await db.prepare(
+        "SELECT jwk FROM org_keys WHERE org_id_hash = ?"
+    ).bind(org_id_hash).first()
+    if row is None:
+        raise KeyError("No public key found for org")
+    return json.loads(row['jwk'])
 
 
-async def delete_org_key(kv_store, org_id: str) -> bool:
-    """Remove org's public key from KV - used for key rotation."""
+async def delete_org_key(db, org_id: str) -> bool:
+    """Remove org's public key from D1 - used for key rotation."""
     org_id_hash = hash_org_id(org_id)
-    await kv_store.delete(f"org_key:{org_id_hash}")
+    await db.prepare(
+        "DELETE FROM org_keys WHERE org_id_hash = ?"
+    ).bind(org_id_hash).run()
     return True
