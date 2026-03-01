@@ -7,7 +7,7 @@ import hashlib
 from datetime import datetime
 from typing import Dict, Any, List, Optional
 from urllib.parse import parse_qs
-
+from workers import Response
 from models.task import Task, TaskStatus, TaskType
 from models.target import Target, TargetType
 from models.result import ScanResult, VulnerabilityLevel
@@ -24,10 +24,10 @@ class BLTWorker:
     def __init__(self, env):
         """Initialize the worker with Cloudflare environment bindings."""
         self.env = env
-        self.job_store = JobStateStore(env.JOB_STATE)
-        self.task_queue = env.TASK_QUEUE
-        self.vuln_db = VulnerabilityDatabase(env.VULN_DB)
-        self.target_registry = env.TARGET_REGISTRY
+        self.job_store = JobStateStore(getattr(env, 'JOB_STATE', None))
+        self.task_queue = getattr(env, 'TASK_QUEUE', None)
+        self.vuln_db = VulnerabilityDatabase(getattr(env, 'VULN_DB', None))
+        self.target_registry = getattr(env, 'TARGET_REGISTRY', None)
         self.deduplicator = TaskDeduplicator()
         self.coordinator = ScannerCoordinator(env)
         self.discovery = AutonomousDiscovery()
@@ -573,20 +573,6 @@ class BLTWorker:
             status=status,
             headers=response_headers
         )
-
-
-# Note: In actual Cloudflare Workers Python runtime, use the built-in Response
-# This is a mock for development and testing purposes
-class Response:
-    """Mock Response class for development. In production, Workers provides Response."""
-    
-    def __init__(self, body, status=200, headers=None):
-        self.body = body
-        self.status = status
-        self.headers = headers or {}
-    
-    # In production, use: from js import Response
-    # Or rely on Workers runtime's built-in Response
 
 
 # Main worker entry point

@@ -2,34 +2,49 @@ name = "blt-netguardian"
 main = "src/worker.py"
 compatibility_date = "2024-01-01"
 compatibility_flags = ["python_workers"]
-workers_dev = true
 
-# KV Namespaces for job state and task storage
-[[kv_namespaces]]
-binding = "JOB_STATE"
-id = "job_state_namespace"
-preview_id = "job_state_preview"
-
-[[kv_namespaces]]
-binding = "TASK_QUEUE"
-id = "task_queue_namespace"
-preview_id = "task_queue_preview"
-
-[[kv_namespaces]]
-binding = "VULN_DB"
-id = "vuln_db_namespace"
-preview_id = "vuln_db_preview"
-
-[[kv_namespaces]]
-binding = "TARGET_REGISTRY"
-id = "target_registry_namespace"
-preview_id = "target_registry_preview"
 
 # Environment variables
 [vars]
 ENVIRONMENT = "production"
-MAX_WORKERS = "10"
-TASK_TIMEOUT = "300"
+
+[observability]
+enabled = false
+head_sampling_rate = 1
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+persist = true
+invocation_logs = true
+
+[observability.traces]
+enabled = false
+persist = true
+head_sampling_rate = 1
+
+# KV Namespace Bindings
+# Replace the placeholder IDs below with your actual Cloudflare KV namespace IDs.
+# Create KV namespaces via: wrangler kv:namespace create <BINDING_NAME>
+[[kv_namespaces]]
+binding = "JOB_STATE"
+id = "00000000000000000000000000000001"
+preview_id = "00000000000000000000000000000001"
+
+[[kv_namespaces]]
+binding = "TASK_QUEUE"
+id = "00000000000000000000000000000002"
+preview_id = "00000000000000000000000000000002"
+
+[[kv_namespaces]]
+binding = "VULN_DB"
+id = "00000000000000000000000000000003"
+preview_id = "00000000000000000000000000000003"
+
+[[kv_namespaces]]
+binding = "TARGET_REGISTRY"
+id = "00000000000000000000000000000004"
+preview_id = "00000000000000000000000000000004"
 
 # Note: Durable Objects removed - not implemented yet
 # Note: Build configuration removed - Workers Python runtime doesn't need pip install
