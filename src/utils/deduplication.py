@@ -1,6 +1,6 @@
 """Task deduplication utilities."""
 import hashlib
-import json
+# import json
 from typing import Dict, Any
 
 
@@ -27,7 +27,12 @@ class TaskDeduplicator:
         # check persistent storage
         if self.db:
             row = await self.db.prepare(
-                "SELECT task_hash FROM task_hashes WHERE task_hash = ?"
+                """
+                SELECT task_hash
+                FROM task_hashes
+                WHERE task_hash = ?
+                AND created_at > datetime('now', '-24 hours')
+                """
             ).bind(task_hash).first()
 
             if row:
@@ -40,7 +45,7 @@ class TaskDeduplicator:
         if self.db:
             from datetime import datetime
             await self.db.prepare(
-                "INSERT INTO task_hashes (task_hash, created_at) VALUES (?, ?)"
+                "INSERT OR IGNORE INTO task_hashes (task_hash, created_at) VALUES (?, ?)"
             ).bind(task_hash, datetime.utcnow().isoformat()).run()
         # In production, also check persistent storage:
         # existing_task = await task_queue.get(task_hash)
