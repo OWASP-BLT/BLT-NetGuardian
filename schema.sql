@@ -50,3 +50,9 @@ CREATE TABLE IF NOT EXISTS vulnerabilities (
 
 CREATE INDEX IF NOT EXISTS idx_tasks_job_id ON tasks(job_id);
 CREATE INDEX IF NOT EXISTS idx_vulnerabilities_severity ON vulnerabilities(severity);
+
+-- Task deduplication table . stores hashes of recently scheduled tasks to prevent duplicates
+CREATE TABLE IF NOT EXISTS task_hashes (
+    task_hash TEXT PRIMARY KEY,
+    created_at TEXT
+);
