@@ -7,8 +7,9 @@ from typing import Dict, Any
 class TaskDeduplicator:
     """Handles task deduplication to prevent redundant scanning."""
     
-    def __init__(self):
+    def __init__(self, db = None):
         self.seen_hashes = set()
+        self.db = db
     
     def generate_task_hash(self, task) -> str:
         """Generate a unique hash for a task based on its key attributes."""
@@ -23,12 +24,24 @@ class TaskDeduplicator:
         # Check if we've seen this hash in recent memory
         if task_hash in self.seen_hashes:
             return True
-        
+        # check persistent storage
+        if self.db:
+            row = await self.db.prepare(
+                "SELECT task_hash FROM task_hashes WHERE task_hash = ?"
+            ).bind(task_hash).first()
+
+            if row:
+                return True
         # Check if similar task exists in queue (within last 24 hours)
         # This would query the KV store for existing tasks
         # For now, we'll just mark as seen
         self.seen_hashes.add(task_hash)
-        
+        # store hash in database
+        if self.db:
+            from datetime import datetime
+            await self.db.prepare(
+                "INSERT INTO task_hashes (task_hash, created_at) VALUES (?, ?)"
+            ).bind(task_hash, datetime.utcnow().isoformat()).run()
         # In production, also check persistent storage:
         # existing_task = await task_queue.get(task_hash)
         # if existing_task:
