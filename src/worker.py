@@ -16,6 +16,7 @@ from utils.storage import JobStateStore, TaskQueueStore, TargetRegistryStore, Vu
 from scanners.coordinator import ScannerCoordinator
 from scanners.autonomous_discovery import AutonomousDiscovery
 from scanners.contact_notifier import ContactNotifier
+from utils.result_normalizer import ResultNormalizer
 
 
 class BLTWorker:
@@ -356,23 +357,16 @@ class BLTWorker:
             data = await request.json()
             task_id = data.get('task_id')
             agent_type = data.get('agent_type')
-            results = data.get('results', {})
+            results = data.get('results') or {}
             
             if not task_id or not agent_type:
                 return self.json_response({
                     'error': 'Missing required fields: task_id, agent_type'
                 }, status=400)
             
-            # Create scan result object
-            result = ScanResult(
-                result_id=self.generate_id(f"result-{task_id}-{agent_type}"),
-                task_id=task_id,
-                agent_type=agent_type,
-                findings=results.get('findings', []),
-                vulnerabilities=results.get('vulnerabilities', []),
-                metadata=results.get('metadata', {}),
-                timestamp=datetime.utcnow().isoformat()
-            )
+            # Normalize scanner output before creating ScanResult
+            result = ResultNormalizer.normalize(task_id, agent_type, results)
+            result.result_id = self.generate_id(f"result-{task_id}-{agent_type}")
             
             # Process and store vulnerabilities
             for vuln in result.vulnerabilities:
