@@ -10,6 +10,8 @@ class ResultNormalizer:
 
     @staticmethod
     def normalize(task_id: str, agent_type: str, results: Dict[str, Any]) -> ScanResult:
+        if not isinstance(results, dict):
+            results = {}
         # Scanners can sometimes return malformed payloads.
         # Guard against unexpected types so ingestion doesn't break the pipeline.
         findings = results.get("findings", [])
@@ -42,7 +44,10 @@ class ResultNormalizer:
     def _normalize_vulnerability(vuln: Dict[str, Any]) -> Dict[str, Any]:
         # normalize severity to one of the supported vulnerability levels.
         # Unknown/unexpected values are downgraded to "info".
-        severity = vuln.get("severity", "info").lower()
+        severity = vuln.get("severity", "info")
+        if not isinstance(severity, str):
+            severity = "info"
+        severity = severity.lower()
 
         valid_levels = [level.value for level in VulnerabilityLevel]
         if severity not in valid_levels:
