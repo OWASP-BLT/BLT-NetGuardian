@@ -1,5 +1,5 @@
 from typing import Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 
 from models.result import ScanResult, VulnerabilityLevel
 
@@ -37,7 +37,7 @@ class ResultNormalizer:
             findings=findings,
             vulnerabilities=normalized_vulns,
             metadata=metadata,
-            timestamp=datetime.utcnow().isoformat()
+            timestamp=datetime.now(timezone.utc).isoformat()
         )
     
     @staticmethod
@@ -53,6 +53,19 @@ class ResultNormalizer:
         if severity not in valid_levels:
             severity = "info"
 
+        references = vuln.get("references", [])
+        if not isinstance(references, list):
+            references = []
+
+        cvss_score = vuln.get("cvss_score")
+        if cvss_score is not None:
+            try:
+                cvss_score = float(cvss_score)
+                if not (0.0 <= cvss_score <= 10.0):
+                    cvss_score = None
+            except (TypeError, ValueError):
+                cvss_score = None
+
         return {
             "type": vuln.get("type", "unknown"),
             "severity": severity,
@@ -60,7 +73,7 @@ class ResultNormalizer:
             "description": vuln.get("description", ""),
             "affected_component": vuln.get("affected_component", "unknown"),
             "cve_id": vuln.get("cve_id"),
-            "cvss_score": vuln.get("cvss_score"),
+            "cvss_score": cvss_score,
             "remediation": vuln.get("remediation"),
-            "references": vuln.get("references", []),
+            "references": references,
         }

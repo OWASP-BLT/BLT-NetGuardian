@@ -357,7 +357,7 @@ class BLTWorker:
             data = await request.json()
             task_id = data.get('task_id')
             agent_type = data.get('agent_type')
-            results = data.get('results') or {}
+            results = data.get('results', {})
             
             if not task_id or not agent_type:
                 return self.json_response({
@@ -369,8 +369,8 @@ class BLTWorker:
             result.result_id = self.generate_id(f"result-{task_id}-{agent_type}")
             
             # Process and store vulnerabilities
-            for vuln in result.vulnerabilities:
-                vuln_id = self.generate_id(f"vuln-{task_id}-{vuln.get('type')}")
+            for idx, vuln in enumerate(result.vulnerabilities):
+                vuln_id = self.generate_id(f"vuln-{task_id}-{vuln.get('type')}-{idx}")
                 await self.vuln_db.store_vulnerability(vuln_id, {
                     **vuln,
                     'result_id': result.result_id,
