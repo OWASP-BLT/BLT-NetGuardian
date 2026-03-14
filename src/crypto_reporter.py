@@ -1,6 +1,22 @@
 """
-Compatible zero-trust vulnerability reporter
+Workers-compatible Zero-Trust Vulnerability Reporter
 
+The original secure_reporter.py used python-gnupg which needs GPG
+binaries and filesystem access. Cloudflare Workers has neither.
+This uses Web Crypto API instead - no dependencies, runs in Workers.
+
+Updated to use Cloudflare D1 database instead of KV store,
+following architectural change in PR #12.
+
+Security fixes applied:
+- Full SHA-256 everywhere, no truncation
+- org_id hashed before storage, never plaintext
+- AES non-extractable, wrapped with RSA-OAEP
+- AAD binding in AES-GCM for ciphertext integrity
+- JWK validation rejects malformed/private keys
+- UUID for submission_id
+
+(OWASP BLT-NetGuardian contributor)
 """
 import json
 import hashlib
@@ -33,15 +49,15 @@ def validate_jwk_public_key(jwk: dict) -> bool:
         return False
     if not jwk.get("n") or not jwk.get("e"):
         return False
-    if "d" in jwk:
+    if "d" in jwk:  # reject private keys submitted by mistake
         return False
     return True
 
 
 def hash_org_id(org_id: str) -> str:
     """
-    Hash org_id using full SHA-256.
-    Never store plaintext org_id as database key.
+    Hash org_id using full SHA-256 - 256 bits, no truncation.
+    Never store or use plaintext org_id as a database key.
     """
     return hashlib.sha256(org_id.encode()).hexdigest()
 
@@ -84,8 +100,8 @@ def build_submission(
     key_fingerprint: str
 ) -> dict:
     """
-    Build final submission after encryption.
-    org_id is hashed before storage - never stored plaintext.
+    Build final submission object after encryption.
+    org_id is hashed - never stored in plaintext.
     submission_id uses UUID for guaranteed uniqueness.
     """
     return {
@@ -97,10 +113,14 @@ def build_submission(
         "encryption_method": "AES-GCM-256 + RSA-OAEP wrapped key"
     }
 
+
+# D1 database functions
+# Migrated from KV store to D1 following PR #12 architecture change
+
 async def store_org_key(db, org_id: str, jwk: dict) -> bool:
     """
     Store org's JWK public key in Cloudflare D1.
-    Uses hashed org_id - never stores plaintext org_id.
+    KV key uses hashed org_id - never stores plaintext org_id.
     """
     if not validate_jwk_public_key(jwk):
         raise ValueError("Invalid or malformed JWK public key")
@@ -133,7 +153,7 @@ async def get_org_key(db, org_id: str) -> dict:
 
 
 async def delete_org_key(db, org_id: str) -> bool:
-    """Remove org's public key from D1 - used for key rotation."""
+    """Remove org's public key from D1 - used during key rotation."""
     org_id_hash = hash_org_id(org_id)
     await db.prepare(
         "DELETE FROM org_keys WHERE org_id_hash = ?"
