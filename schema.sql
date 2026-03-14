@@ -1,6 +1,3 @@
--- BLT-NetGuardian D1 Database Schema
--- Apply with: wrangler d1 execute blt-netguardian --file=schema.sql
-
 CREATE TABLE IF NOT EXISTS jobs (
     job_id TEXT PRIMARY KEY,
     target_id TEXT NOT NULL,
@@ -48,5 +45,12 @@ CREATE TABLE IF NOT EXISTS vulnerabilities (
     updated_at TEXT
 );
 
+CREATE TABLE IF NOT EXISTS org_keys (
+    org_id_hash TEXT PRIMARY KEY,
+    jwk TEXT NOT NULL,
+    registered_at TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_tasks_job_id ON tasks(job_id);
 CREATE INDEX IF NOT EXISTS idx_vulnerabilities_severity ON vulnerabilities(severity);
+CREATE INDEX IF NOT EXISTS idx_org_keys_hash ON org_keys(org_id_hash);
