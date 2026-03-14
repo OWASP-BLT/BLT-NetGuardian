@@ -31,10 +31,11 @@ from worker import BLTWorker, on_fetch  # noqa: E402
 class FakeRequest:
     """Minimal request object for worker handler tests."""
 
-    def __init__(self, url, method="GET", payload=None):
+    def __init__(self, url, method="GET", payload=None, headers=None):
         self.url = url
         self.method = method
         self._payload = payload
+        self.headers = headers or {}
 
     async def json(self):
         return self._payload or {}
@@ -433,3 +434,83 @@ async def test_handle_request_requires_authentication_for_read_endpoints_by_defa
 
     assert response.status == 503
     assert payload["error"] == "API authentication is not configured"
+
+
+@pytest.mark.asyncio
+async def test_is_allowed_origin_permits_same_worker_origin():
+    """Requests with Origin matching the worker's own host must be allowed."""
+    worker = BLTWorker(SimpleNamespace(DB=None))
+
+    request = FakeRequest(
+        "https://blt-netguardian.workers.dev/api/discovery/suggest",
+        headers={"Origin": "https://blt-netguardian.workers.dev"},
+    )
+    assert worker.is_allowed_origin(request) is True
+
+
+@pytest.mark.asyncio
+async def test_is_allowed_origin_rejects_third_party_origin():
+    """Requests from an unknown third-party origin are rejected."""
+    worker = BLTWorker(SimpleNamespace(DB=None))
+
+    request = FakeRequest(
+        "https://blt-netguardian.workers.dev/api/discovery/suggest",
+        headers={"Origin": "https://evil.example.com"},
+    )
+    assert worker.is_allowed_origin(request) is False
+
+
+@pytest.mark.asyncio
+async def test_is_allowed_origin_permits_configured_origin():
+    """Origins listed in CORS_ALLOWED_ORIGINS env var are permitted."""
+    worker = BLTWorker(
+        SimpleNamespace(DB=None, CORS_ALLOWED_ORIGINS="https://custom-frontend.example.com")
+    )
+
+    request = FakeRequest(
+        "https://blt-netguardian.workers.dev/api/discovery/suggest",
+        headers={"Origin": "https://custom-frontend.example.com"},
+    )
+    assert worker.is_allowed_origin(request) is True
+
+
+@pytest.mark.asyncio
+async def test_handle_request_returns_403_for_disallowed_origin():
+    """Worker returns 403 when Origin header is not in the allowed list."""
+    worker = BLTWorker(SimpleNamespace(DB=None))
+
+    response = await worker.handle_request(
+        FakeRequest(
+            "https://blt-netguardian.workers.dev/api/discovery/status",
+            headers={"Origin": "https://evil.example.com"},
+        )
+    )
+    payload = parse_json(response)
+
+    assert response.status == 403
+    assert payload["error"] == "Origin not allowed"
+
+
+@pytest.mark.asyncio
+async def test_get_cors_headers_reflects_same_worker_origin():
+    """CORS headers echo back the origin when it matches the worker's own host."""
+    worker = BLTWorker(SimpleNamespace(DB=None))
+
+    request = FakeRequest(
+        "https://blt-netguardian.workers.dev/api/discovery/suggest",
+        headers={"Origin": "https://blt-netguardian.workers.dev"},
+    )
+    headers = worker.get_cors_headers(request)
+
+    assert headers["Access-Control-Allow-Origin"] == "https://blt-netguardian.workers.dev"
+
+
+@pytest.mark.asyncio
+async def test_extract_origin_returns_scheme_and_host():
+    """_extract_origin correctly parses scheme+host from a full URL."""
+    worker = BLTWorker(SimpleNamespace(DB=None))
+
+    assert worker._extract_origin("https://example.com/api/foo?bar=1") == "https://example.com"
+    assert worker._extract_origin("http://localhost:8787/") == "http://localhost:8787"
+    assert worker._extract_origin(None) is None
+    assert worker._extract_origin("") is None
