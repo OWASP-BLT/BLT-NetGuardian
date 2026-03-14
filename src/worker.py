@@ -5,7 +5,7 @@ Serves the frontend (public/) as static assets and handles the backend API.
 import json
 import hashlib
 import hmac
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional, Tuple
 from urllib.parse import parse_qs
 try:
@@ -139,13 +139,13 @@ class BLTWorker:
                 target_url=suggestion,
                 scan_types=['crawler', 'vulnerability_scan'],
                 notes='User suggested target',
-                registered_at=datetime.utcnow().isoformat()
+                registered_at=datetime.now(timezone.utc).isoformat()
             )
             
             await self.target_registry.save_target(target_obj.to_dict())
             
             # Queue scan tasks
-            job_id = self.generate_id(f"job-{target_id}-{datetime.utcnow().isoformat()}")
+            job_id = self.generate_id(f"job-{target_id}-{datetime.now(timezone.utc).isoformat()}")
             
             task = Task(
                 task_id=self.generate_id(f"{job_id}-crawler"),
@@ -154,7 +154,7 @@ class BLTWorker:
                 task_type='crawler',
                 priority='high' if priority else 'medium',
                 status=TaskStatus.QUEUED,
-                created_at=datetime.utcnow().isoformat()
+                created_at=datetime.now(timezone.utc).isoformat()
             )
             
             await self.task_queue.save_task(task.to_dict())
@@ -165,7 +165,7 @@ class BLTWorker:
                 'status': 'queued',
                 'total_tasks': 1,
                 'completed_tasks': 0,
-                'created_at': datetime.utcnow().isoformat(),
+                'created_at': datetime.now(timezone.utc).isoformat(),
                 'task_ids': [task.task_id],
                 'source': 'user_suggestion'
             }
@@ -249,7 +249,7 @@ class BLTWorker:
                 }, status=400)
             
             # Generate job ID
-            job_id = self.generate_id(f"job-{target_id}-{datetime.utcnow().isoformat()}")
+            job_id = self.generate_id(f"job-{target_id}-{datetime.now(timezone.utc).isoformat()}")
             
             # Create tasks and check for duplicates
             tasks = []
@@ -263,7 +263,7 @@ class BLTWorker:
                     task_type=task_type,
                     priority=priority,
                     status=TaskStatus.QUEUED,
-                    created_at=datetime.utcnow().isoformat()
+                    created_at=datetime.now(timezone.utc).isoformat()
                 )
                 
                 # Check for duplicate
@@ -281,7 +281,7 @@ class BLTWorker:
                 'status': 'queued',
                 'total_tasks': len(tasks),
                 'completed_tasks': 0,
-                'created_at': datetime.utcnow().isoformat(),
+                'created_at': datetime.now(timezone.utc).isoformat(),
                 'task_ids': [t.task_id for t in tasks]
             }
             
@@ -326,7 +326,7 @@ class BLTWorker:
                 target_url=target,
                 scan_types=data.get('scan_types', []),
                 notes=data.get('notes', ''),
-                registered_at=datetime.utcnow().isoformat()
+                registered_at=datetime.now(timezone.utc).isoformat()
             )
             
             # Store in target registry
@@ -350,6 +350,12 @@ class BLTWorker:
             data = await request.json()
             task_id = data.get('task_id')
             agent_type = data.get('agent_type')
+
+            if 'results' not in data and any(key in data for key in ('findings', 'vulnerabilities', 'metadata')):
+                return self.json_response({
+                    'error': 'Legacy payload format is not supported; use results.{findings,vulnerabilities,metadata}'
+                }, status=400)
+
             results = data.get('results', {})
 
             if (
@@ -386,10 +392,10 @@ class BLTWorker:
                 result_id=self.generate_id(f"result-{task_id}-{agent_type}"),
                 task_id=task_id,
                 agent_type=agent_type,
-                findings=findings,
-                vulnerabilities=vulnerabilities,
-                metadata=metadata,
-                timestamp=datetime.utcnow().isoformat()
+                findings=results.get('findings', []),
+                vulnerabilities=results.get('vulnerabilities', []),
+                metadata=results.get('metadata', {}),
+                timestamp=datetime.now(timezone.utc).isoformat()
             )
 
             # Process and store vulnerabilities
@@ -399,20 +405,19 @@ class BLTWorker:
                     **vuln,
                     'result_id': result.result_id,
                     'task_id': task_id,
-                    'discovered_at': datetime.utcnow().isoformat()
+                    'discovered_at': datetime.now(timezone.utc).isoformat()
                 })
 
             # Update task status
+            completed_at = datetime.now(timezone.utc).isoformat()
             await self.task_queue.update_task(task_id, {
                 'status': TaskStatus.COMPLETED,
-                'completed_at': datetime.utcnow().isoformat(),
+                'completed_at': completed_at,
                 'result_id': result.result_id
             })
 
             # Update job progress
-            job_id = task.get('job_id')
-            if job_id:
-                await self.job_store.update_job_progress(job_id)
+            await self.job_store.update_job_progress(task['job_id'])
 
             # Automatically contact stakeholders if vulnerabilities found
             contact_result = None
