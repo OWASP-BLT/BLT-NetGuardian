@@ -7,7 +7,7 @@ import hashlib
 import hmac
 from datetime import datetime
 from typing import Dict, Any, List, Optional, Tuple
-from urllib.parse import parse_qs
+from urllib.parse import parse_qs, urlparse
 try:
     from workers import Response
 except ImportError:
@@ -557,10 +557,23 @@ class BLTWorker:
             return None
         return headers.get(key)
 
+    def _extract_origin(self, url: Optional[str]) -> Optional[str]:
+        """Extract the scheme+host origin component from a URL string."""
+        if not url:
+            return None
+        try:
+            parsed = urlparse(url)
+            if parsed.scheme and parsed.netloc:
+                return f"{parsed.scheme}://{parsed.netloc}"
+        except ValueError:
+            pass
+        return None
+
     def get_cors_headers(self, request) -> Dict[str, str]:
         """Build CORS headers using an explicit origin allowlist."""
         allowed_origins = self.get_allowed_origins()
         origin = self.get_request_header(request, 'Origin')
+        worker_origin = self._extract_origin(getattr(request, 'url', None))
 
         headers = {
             'Access-Control-Allow-Origin': '*',
@@ -570,7 +583,8 @@ class BLTWorker:
             'Vary': 'Origin'
         }
 
-        if origin and origin in allowed_origins:
+        is_same_origin = bool(origin and worker_origin and origin == worker_origin)
+        if origin and (origin in allowed_origins or is_same_origin):
             headers['Access-Control-Allow-Origin'] = origin
         return headers
 
@@ -589,6 +603,10 @@ class BLTWorker:
         """Allow same-origin/server calls and whitelisted browser origins."""
         origin = self.get_request_header(request, 'Origin')
         if not origin:
+            return True
+        # Allow requests originating from the worker's own host (same-origin deploys)
+        worker_origin = self._extract_origin(getattr(request, 'url', None))
+        if worker_origin and origin == worker_origin:
             return True
         return origin in self.get_allowed_origins()
 

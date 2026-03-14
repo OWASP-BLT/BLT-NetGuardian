@@ -381,3 +381,42 @@ tbody tr:hover {
         align-items: flex-start;
     }
 }
+
+/* Consent badge */
+.consent-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    padding: 0.2rem 0.65rem;
+    border: 1px solid transparent;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.consent-badge.consented {
+    color: #166534;
+    background: #dcfce7;
+    border-color: #86efac;
+}
+
+.consent-badge.pending {
+    color: #854d0e;
+    background: #fef3c7;
+    border-color: #fde68a;
+}
+
+.consent-badge.unknown {
+    color: #374151;
+    background: #f3f4f6;
+    border-color: #d1d5db;
+}
+
+.consent-badge.not_consented {
+    color: #991b1b;
+    background: #fee2e2;
+    border-color: #fecaca;
+}

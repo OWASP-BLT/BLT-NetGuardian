@@ -74,6 +74,7 @@ class AutonomousDiscovery:
             'source': 'certificate_transparency',
             'discovered_at': datetime.utcnow().isoformat(),
             'priority': 'normal',
+            'consent': 'unknown',
             'metadata': {
                 'issuer': 'Let\'s Encrypt',
                 'first_seen': datetime.utcnow().isoformat()
@@ -104,6 +105,7 @@ class AutonomousDiscovery:
             'source': 'github_trending',
             'discovered_at': datetime.utcnow().isoformat(),
             'priority': 'normal',
+            'consent': 'consented',
             'metadata': {
                 'stars': 0,
                 'language': 'python',
@@ -133,6 +135,7 @@ class AutonomousDiscovery:
             'source': 'blockchain_monitoring',
             'discovered_at': datetime.utcnow().isoformat(),
             'priority': 'high',  # Blockchain contracts are high priority
+            'consent': 'unknown',
             'metadata': {
                 'network': 'ethereum',
                 'block': 15000000,
@@ -167,6 +170,7 @@ class AutonomousDiscovery:
             'discovered_at': datetime.utcnow().isoformat(),
             'priority': 'high' if priority else 'normal',
             'status': 'queued',
+            'consent': 'pending',
             'metadata': {
                 'user_submitted': True
             }

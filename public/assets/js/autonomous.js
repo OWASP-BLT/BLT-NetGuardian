@@ -58,10 +58,14 @@ async function handleSuggestionSubmit(e) {
         setTimeout(() => loadRecentDiscoveries(), 1000);
     } catch (error) {
         console.error('Suggestion submission error:', error);
+        const isOriginError = error.message && error.message.toLowerCase().includes('origin not allowed');
+        const userMessage = isOriginError
+            ? 'Backend is temporarily unreachable (origin policy). The suggestion was saved locally and will be retried automatically when access is restored.'
+            : `Error: ${error.message}. The suggestion was stored locally and will be retried when backend access returns.`;
         showMessage(
             messageDiv,
             'error',
-            `Error: ${error.message}. The suggestion was stored locally and will be retried when backend access returns.`
+            userMessage
         );
 
         queueLocalSuggestion(suggestion, priority);
@@ -145,6 +149,7 @@ function displayDiscoveries(discoveries) {
         const hasVulns = vulnerabilities.length > 0;
         const vulnClass = hasVulns ? 'vulnerability-found' : '';
         const statusText = getStatusText(discovery.status);
+        const consentBadge = getConsentBadge(discovery.consent);
 
         return `
             <div class="discovery-item ${vulnClass}">
@@ -152,6 +157,7 @@ function displayDiscoveries(discoveries) {
                     <span class="discovery-type">${escapeHtml(discovery.type || 'target')}</span>
                     <span class="discovery-target">${escapeHtml(discovery.target || 'unknown')}</span>
                     <span class="discovery-time">${formatTimeAgo(discovery.discovered_at)}</span>
+                    ${consentBadge}
                 </div>
                 <div class="discovery-status">
                     ${hasVulns ? vulnerabilities.map(v =>
@@ -252,6 +258,17 @@ function getStatusText(status) {
     return statusMap[status] || String(status || 'queued');
 }
 
+function getConsentBadge(consent) {
+    const consentMap = {
+        consented: { icon: 'fa-circle-check', label: 'Consent Given', cssClass: 'consented' },
+        pending: { icon: 'fa-clock', label: 'Consent Pending', cssClass: 'pending' },
+        unknown: { icon: 'fa-circle-question', label: 'No Consent Info', cssClass: 'unknown' },
+        not_consented: { icon: 'fa-ban', label: 'Not Consented', cssClass: 'not_consented' }
+    };
+    const info = consentMap[consent] || consentMap['unknown'];
+    return `<span class="consent-badge ${info.cssClass}" title="Scan consent status: ${info.label}"><i class="fa-solid ${info.icon}" aria-hidden="true"></i> ${info.label}</span>`;
+}
+
 function showMessage(element, type, message) {
     element.className = `message ${type}`;
     element.textContent = message;
@@ -307,12 +324,15 @@ function readDiscoveriesFromDom() {
         const target = item.querySelector('.discovery-target')?.textContent?.trim() || 'unknown';
         const statusElement = item.querySelector('.status');
         const statusClass = Array.from(statusElement?.classList || []).find(cls => !['status'].includes(cls)) || 'queued';
+        const consentElement = item.querySelector('.consent-badge');
+        const consentClass = Array.from(consentElement?.classList || []).find(cls => cls !== 'consent-badge') || 'unknown';
 
         return {
             type,
             target,
             discovered_at: new Date().toISOString(),
             status: statusClass,
+            consent: consentClass,
             vulnerabilities: []
         };
     });
