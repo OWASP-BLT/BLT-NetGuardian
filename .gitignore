@@ -22,8 +22,23 @@ wheels/
 
 # Virtual environments
 venv/
-env/
 ENV/
+env/
+
+# Environment variables
+.env
+.env.local
+
+# GPG keys (DO NOT COMMIT PRIVATE KEYS)
+*.key
+*.asc
+!example_public_key.asc
+gpg_home/
+
+# Reports
+reports/
+*.encrypted
+*.pgp
 
 # IDE
 .vscode/
@@ -32,28 +47,6 @@ ENV/
 *.swo
 *~
 
-# Cloudflare Workers
-.wrangler/
-worker/
-node_modules/
-
-# Environment variables
-.env
-.env.local
-
-# Testing
-.pytest_cache/
-.coverage
-htmlcov/
-
 # OS
 .DS_Store
 Thumbs.db
-
-# Logs
-*.log
-
-# Temporary files
-tmp/
-temp/
-*.tmp
