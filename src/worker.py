@@ -45,7 +45,7 @@ class BLTWorker:
         self.task_queue = TaskQueueStore(db)
         self.vuln_db = VulnerabilityDatabase(db)
         self.target_registry = TargetRegistryStore(db)
-        self.deduplicator = TaskDeduplicator()
+        self.deduplicator = TaskDeduplicator(db)
         self.coordinator = ScannerCoordinator(env)
         self.discovery = AutonomousDiscovery()
         self.notifier = ContactNotifier()
