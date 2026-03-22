@@ -1,3 +1,6 @@
+python-gnupg==0.5.1
+cryptography==42.0.8
+python-dotenv==1.0.0
 # Note: Cloudflare Workers Python runtime has limited package support
 # Most packages must be compatible with the Workers environment
 # For production, only include packages supported by Workers runtime
