@@ -236,7 +236,13 @@ class BLTWorker:
         try:
             data = await request.json()
             target_id = data.get('target_id')
-            if isinstance(target_id, str):
+            if target_id is None:
+                target_id = ''
+            elif not isinstance(target_id, str):
+                return self.json_response({
+                    'error': 'target_id must be a non-empty string'
+                }, status=400)
+            else:
                 target_id = target_id.strip()
             task_types = data.get('task_types', [])
             priority = data.get('priority', 'medium')
@@ -342,10 +348,15 @@ class BLTWorker:
             data = await request.json()
             target_type = data.get('target_type')
             target = data.get('target')
-            
-            if target_type is None or target is None or target_type == '' or target == '':
+
+            missing_reg_fields: List[str] = []
+            if target_type is None or target_type == '':
+                missing_reg_fields.append('target_type')
+            if target is None or target == '':
+                missing_reg_fields.append('target')
+            if missing_reg_fields:
                 return self.json_response({
-                    'error': 'Missing required fields: target_type, target'
+                    'error': f"Missing required fields: {', '.join(missing_reg_fields)}"
                 }, status=400)
 
             if not isinstance(target_type, str) or not target_type.strip():
