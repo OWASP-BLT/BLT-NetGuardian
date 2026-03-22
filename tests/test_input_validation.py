@@ -62,6 +62,8 @@ def test_validate_always_blocks_metadata_hostname():
         allow_private_hosts=True,
     )
     assert normalized is None
+    assert err is not None
+    assert "metadata" in err.lower()
 
 
 def test_validate_rejects_non_string():
@@ -85,3 +87,26 @@ def test_validate_localhost_in_path_allowed_when_host_public():
     )
     assert err is None
     assert normalized is not None
+
+
+def test_validate_schemeless_query_still_resolves_loopback_host():
+    """Scheme-less values with ? must not bypass host checks."""
+    normalized, err = validate_user_target_input(
+        "127.0.0.1?x=1",
+        allow_private_hosts=False,
+    )
+    assert normalized is None
+    assert err is not None
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "http://localhost./path",
+        "https://metadata.gce.internal./v1/",
+    ],
+)
+def test_validate_trailing_dot_hostnames_not_bypass(value):
+    normalized, err = validate_user_target_input(value, allow_private_hosts=False)
+    assert normalized is None
+    assert err is not None

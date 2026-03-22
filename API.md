@@ -6,10 +6,18 @@ https://your-worker.workers.dev
 ```
 
 ## Authentication
-Currently, all endpoints are open. In production, implement authentication using:
-- API keys
-- JWT tokens
-- Cloudflare Access
+When the worker has **`API_SECRET`** configured, every **mutating** API route (`POST`, `PUT`, `PATCH`, `DELETE` under `/api/...`) requires credentials:
+
+- Header **`X-API-Key: <secret>`**, or  
+- Header **`Authorization: Bearer <secret>`**
+
+If **`API_SECRET` is not set**, mutating requests receive **`503`** with `API authentication is not configured`. Invalid or missing credentials receive **`401`**.
+
+Read-only `GET` routes may also require auth when **`AUTHENTICATE_READ_ENDPOINTS`** is enabled (see `worker.py`).
+
+Browser calls must send an **`Origin`** allowed by **`CORS_ALLOWED_ORIGINS`** / **`CORS_ALLOWED_ORIGIN`**; otherwise the worker responds with **`403`**.
+
+For local demos without secrets, leave `API_SECRET` unset and use same-origin or allowed origins only.
 
 ## Endpoints
 
@@ -105,10 +113,15 @@ Register a new scan target in the system.
 
 **POST /api/discovery/suggest**
 
+**Authentication:** Same as other mutating routes — `X-API-Key` or `Authorization: Bearer` when `API_SECRET` is set (see **Authentication** above).
+
 **Request body:** `{ "suggestion": "string (required)", "priority": boolean (optional) }`
 
 **Errors:**
 - `400` - Missing `suggestion`, invalid type, over max length, or disallowed host/IP (loopback, private IPs, cloud metadata patterns — unless `ALLOW_PRIVATE_SCAN_TARGETS=true`)
+- `401` - Missing or invalid API credentials when `API_SECRET` is configured
+- `403` - `Origin` not allowed (browser CORS)
+- `503` - `API_SECRET` not configured (mutating auth unavailable)
 
 ---
 

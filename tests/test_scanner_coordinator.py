@@ -131,3 +131,16 @@ async def test_process_job_returns_all_results():
 
 def test_get_registered_task_types_matches_scanner_registry():
     assert get_registered_task_types() == frozenset(_SCANNER_REGISTRY.keys())
+
+
+def test_expected_core_task_types_remain_registered():
+    """Smoke: accidental deregistration breaks API validation for known scanners."""
+    registered = get_registered_task_types()
+    expected_core = frozenset({
+        "crawler",
+        "web3_monitor",
+        "static_analysis",
+        "contract_audit",
+    })
+    missing = expected_core - registered
+    assert not missing, f"Missing core task types: {sorted(missing)}"

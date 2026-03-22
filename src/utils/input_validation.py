@@ -16,7 +16,6 @@ _BLOCKED_METADATA_HOSTS: frozenset = frozenset({
     "metadata.google.internal",
     "metadata.gce.internal",
     "kubernetes.default",
-    "metadata.google.internal.",  # trailing dot
 })
 
 
@@ -34,7 +33,13 @@ def _extract_host_for_ip_check(value: str) -> str:
         parsed = urlparse(v)
         netloc = (parsed.netloc or "").strip()
     else:
-        netloc = v.split("/")[0].strip()
+        # Scheme-less: drop path/query/fragment so "127.0.0.1?x=1" canonicalizes.
+        netloc = (
+            v.split("/", 1)[0]
+            .split("?", 1)[0]
+            .split("#", 1)[0]
+            .strip()
+        )
 
     if not netloc:
         return ""
@@ -45,19 +50,19 @@ def _extract_host_for_ip_check(value: str) -> str:
     if netloc.startswith("["):
         end = netloc.find("]")
         if end != -1:
-            return netloc[1:end].strip().lower()
-        return netloc.lower()
+            return netloc[1:end].strip().lower().rstrip(".")
+        return netloc.lower().rstrip(".")
 
     if netloc.count(":") > 1 and "." not in netloc.split(":")[0]:
         # Bare IPv6 without brackets (heuristic)
-        return netloc.lower()
+        return netloc.lower().rstrip(".")
 
     host = netloc
     if ":" in host:
         possible_host, _, rest = host.rpartition(":")
         if rest.isdigit() or rest == "":
             host = possible_host
-    return host.strip().lower()
+    return host.strip().lower().rstrip(".")
 
 
 def _ip_from_host(host: str) -> Optional[ipaddress.IPv4Address | ipaddress.IPv6Address]:
@@ -109,6 +114,9 @@ def validate_user_target_input(
     host = _extract_host_for_ip_check(s)
     if not host:
         return s, None
+
+    # Trailing FQDN dot (e.g. localhost., metadata.gce.internal.) must not bypass checks.
+    host = host.rstrip(".")
 
     if host in _BLOCKED_METADATA_HOSTS or host.endswith(".gce.internal"):
         return None, f"{field_name} must not target cloud metadata or internal control-plane hosts"

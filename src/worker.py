@@ -389,7 +389,6 @@ class BLTWorker:
                 return self.json_response({
                     'error': 'target must be a non-empty string'
                 }, status=400)
-            target = target.strip()
             normalized_target, terr = validate_user_target_input(
                 target,
                 max_len=self.MAX_TARGET_URL_LEN,
