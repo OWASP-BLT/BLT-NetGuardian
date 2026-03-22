@@ -45,6 +45,15 @@ def parse_json(response):
     return json.loads(response.body)
 
 
+def assert_api_security_headers(headers: dict) -> None:
+    """Baseline headers applied to JSON responses and OPTIONS preflight."""
+    assert headers.get("X-Content-Type-Options") == "nosniff"
+    assert headers.get("X-Frame-Options") == "DENY"
+    assert headers.get("Referrer-Policy") == "strict-origin-when-cross-origin"
+    assert "camera=()" in (headers.get("Permissions-Policy") or "")
+    assert headers.get("Cache-Control") == "no-store"
+
+
 @pytest.mark.asyncio
 async def test_handle_request_options_returns_cors_headers():
     worker = BLTWorker(SimpleNamespace(DB=None))
@@ -57,6 +66,7 @@ async def test_handle_request_options_returns_cors_headers():
     assert response.body == ""
     assert response.headers["Access-Control-Allow-Origin"] == "*"
     assert "GET, POST, PUT, DELETE, OPTIONS" in response.headers["Access-Control-Allow-Methods"]
+    assert_api_security_headers(response.headers)
 
 
 @pytest.mark.asyncio
@@ -70,6 +80,7 @@ async def test_handle_request_root_returns_404_without_assets():
 
     assert response.status == 404
     assert payload["error"] == "Not found"
+    assert_api_security_headers(response.headers)
 
 
 @pytest.mark.asyncio
@@ -81,6 +92,7 @@ async def test_handle_request_unknown_path_returns_404():
 
     assert response.status == 404
     assert payload["error"] == "Not found"
+    assert_api_security_headers(response.headers)
 
 
 @pytest.mark.asyncio
@@ -94,6 +106,7 @@ async def test_handle_task_queue_rejects_non_post():
 
     assert response.status == 405
     assert payload["error"] == "Method not allowed"
+    assert_api_security_headers(response.headers)
 
 
 @pytest.mark.asyncio
@@ -433,3 +446,122 @@ async def test_handle_request_requires_authentication_for_read_endpoints_by_defa
 
     assert response.status == 503
     assert payload["error"] == "API authentication is not configured"
+
+
+@pytest.mark.asyncio
+async def test_handle_discovery_suggest_rejects_non_post():
+    worker = BLTWorker(SimpleNamespace(DB=None))
+
+    response = await worker.handle_discovery_suggest(
+        FakeRequest("https://api.example.com/api/discovery/suggest", method="GET")
+    )
+    payload = parse_json(response)
+
+    assert response.status == 405
+    assert payload["error"] == "Method not allowed"
+    assert_api_security_headers(response.headers)
+
+
+@pytest.mark.asyncio
+async def test_handle_discovery_suggest_requires_suggestion_field():
+    worker = BLTWorker(SimpleNamespace(DB=None))
+
+    response = await worker.handle_discovery_suggest(
+        FakeRequest(
+            "https://api.example.com/api/discovery/suggest",
+            method="POST",
+            payload={"priority": False},
+        )
+    )
+    payload = parse_json(response)
+
+    assert response.status == 400
+    assert "suggestion" in payload["error"].lower()
+    assert_api_security_headers(response.headers)
+
+
+@pytest.mark.asyncio
+async def test_handle_discovery_suggest_success_without_db():
+    worker = BLTWorker(SimpleNamespace(DB=None))
+
+    response = await worker.handle_discovery_suggest(
+        FakeRequest(
+            "https://api.example.com/api/discovery/suggest",
+            method="POST",
+            payload={
+                "suggestion": "https://example.com",
+                "priority": True,
+            },
+        )
+    )
+    payload = parse_json(response)
+
+    assert response.status == 200
+    assert payload["success"] is True
+    assert len(payload["discovery_id"]) == 16
+    assert payload["job_id"]
+    assert "example.com" in payload["message"]
+    assert_api_security_headers(response.headers)
+
+
+@pytest.mark.asyncio
+async def test_handle_discovery_recent_rejects_invalid_limit():
+    worker = BLTWorker(SimpleNamespace(DB=None))
+
+    response = await worker.handle_discovery_recent(
+        FakeRequest("https://api.example.com/api/discovery/recent?limit=0")
+    )
+    payload = parse_json(response)
+
+    assert response.status == 400
+    assert payload["error"] == "Invalid limit parameter"
+    assert_api_security_headers(response.headers)
+
+
+@pytest.mark.asyncio
+async def test_handle_discovery_recent_returns_discoveries():
+    worker = BLTWorker(SimpleNamespace(DB=None))
+
+    response = await worker.handle_discovery_recent(
+        FakeRequest("https://api.example.com/api/discovery/recent?limit=5")
+    )
+    payload = parse_json(response)
+
+    assert response.status == 200
+    assert payload["success"] is True
+    assert payload["count"] == len(payload["discoveries"])
+    assert isinstance(payload["discoveries"], list)
+    assert_api_security_headers(response.headers)
+
+
+@pytest.mark.asyncio
+async def test_handle_discovery_status_returns_expected_shape():
+    worker = BLTWorker(SimpleNamespace(DB=None))
+
+    response = await worker.handle_discovery_status(
+        FakeRequest("https://api.example.com/api/discovery/status")
+    )
+    payload = parse_json(response)
+
+    assert response.status == 200
+    assert payload["status"] == "active"
+    assert "current_target" in payload
+    assert "scanned_today" in payload
+    assert "vulnerabilities_found" in payload
+    assert "stats" in payload
+    assert isinstance(payload["stats"], dict)
+    assert_api_security_headers(response.headers)
+
+
+@pytest.mark.asyncio
+async def test_handle_request_discovery_status_includes_security_headers_when_reads_public():
+    worker = BLTWorker(SimpleNamespace(DB=None, AUTHENTICATE_READ_ENDPOINTS="false"))
+
+    response = await worker.handle_request(
+        FakeRequest("https://api.example.com/api/discovery/status")
+    )
+    payload = parse_json(response)
+
+    assert response.status == 200
+    assert payload["status"] == "active"
+    assert_api_security_headers(response.headers)

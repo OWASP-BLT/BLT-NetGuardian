@@ -11,6 +11,20 @@ Currently, all endpoints are open. In production, implement authentication using
 - JWT tokens
 - Cloudflare Access
 
+## HTTP response headers (API)
+
+All JSON API responses and `OPTIONS` preflight responses include baseline security headers:
+
+| Header | Value |
+|--------|--------|
+| `X-Content-Type-Options` | `nosniff` |
+| `X-Frame-Options` | `DENY` |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` |
+| `Permissions-Policy` | Restricts `camera`, `microphone`, `geolocation` |
+| `Cache-Control` | `no-store` |
+
+CORS headers (`Access-Control-*`) are added in addition to these where applicable.
+
 ## Endpoints
 
 ### 1. Home / Web Interface
