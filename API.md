@@ -32,9 +32,9 @@ Queue new security scanning tasks for a target.
 **Request Body:**
 ```json
 {
-  "target_id": "string (required)",
+  "target_id": "string (required; non-string JSON values are rejected)",
   "task_types": ["string"] (required),
-  "priority": "low|medium|high (optional, default: medium)"
+  "priority": "low|medium|high (optional, default: medium; case-insensitive, surrounding whitespace ignored)"
 }
 ```
 
@@ -58,7 +58,7 @@ Queue new security scanning tasks for a target.
 ```
 
 **Errors:**
-- `400` - Missing required fields
+- `400` - Missing required fields, non-string `target_id`, invalid `priority`, invalid `task_types` (must be a non-empty array of known scanner task types), or unknown task type strings
 - `500` - Failed to queue tasks
 
 ---
@@ -96,7 +96,7 @@ Register a new scan target in the system.
 ```
 
 **Errors:**
-- `400` - Missing required fields
+- `400` - Missing required fields, invalid `target_type`, `target` too long (max 4096 characters), non-array `scan_types`, or unknown entries in `scan_types`
 - `500` - Failed to register target
 
 ---
@@ -152,7 +152,7 @@ Submit scan results from security scanning agents.
 ```
 
 **Errors:**
-- `400` - Missing required fields
+- `400` - Missing required fields, invalid payload structure, or unknown `task_id`
 - `500` - Failed to ingest results
 
 ---

@@ -159,6 +159,143 @@ async def test_handle_task_queue_tracks_deduplicated_tasks():
 
 
 @pytest.mark.asyncio
+async def test_handle_task_queue_rejects_unknown_task_type():
+    worker = BLTWorker(SimpleNamespace(DB=None))
+
+    response = await worker.handle_task_queue(
+        FakeRequest(
+            "https://api.example.com/api/tasks/queue",
+            method="POST",
+            payload={
+                "target_id": "target-1",
+                "task_types": ["crawler", "not_a_real_scanner"],
+                "priority": "medium",
+            },
+        )
+    )
+    payload = parse_json(response)
+
+    assert response.status == 400
+    assert "Unknown task_types" in payload["error"]
+    assert "not_a_real_scanner" in payload["error"]
+
+
+@pytest.mark.asyncio
+async def test_handle_task_queue_rejects_invalid_priority():
+    worker = BLTWorker(SimpleNamespace(DB=None))
+
+    response = await worker.handle_task_queue(
+        FakeRequest(
+            "https://api.example.com/api/tasks/queue",
+            method="POST",
+            payload={
+                "target_id": "target-1",
+                "task_types": ["crawler"],
+                "priority": "urgent",
+            },
+        )
+    )
+    payload = parse_json(response)
+
+    assert response.status == 400
+    assert "priority" in payload["error"].lower()
+
+
+@pytest.mark.asyncio
+async def test_handle_task_queue_normalizes_priority_case_and_whitespace():
+    """Priority is compared case-insensitively after strip (common client mistake)."""
+    worker = BLTWorker(SimpleNamespace(DB=None))
+    worker.deduplicator = SimpleNamespace(is_duplicate=AsyncMock(return_value=False))
+    worker.task_queue = SimpleNamespace(save_task=AsyncMock())
+    worker.job_store = SimpleNamespace(save_job=AsyncMock())
+    worker.coordinator = SimpleNamespace(process_job=AsyncMock())
+
+    response = await worker.handle_task_queue(
+        FakeRequest(
+            "https://api.example.com/api/tasks/queue",
+            method="POST",
+            payload={
+                "target_id": "target-1",
+                "task_types": ["crawler"],
+                "priority": "  HIGH  ",
+            },
+        )
+    )
+    payload = parse_json(response)
+
+    assert response.status == 200
+    _, queued_tasks = worker.coordinator.process_job.await_args.args
+    assert queued_tasks[0].priority == "high"
+
+
+@pytest.mark.asyncio
+async def test_handle_task_queue_rejects_whitespace_only_target_id():
+    worker = BLTWorker(SimpleNamespace(DB=None))
+
+    response = await worker.handle_task_queue(
+        FakeRequest(
+            "https://api.example.com/api/tasks/queue",
+            method="POST",
+            payload={
+                "target_id": "   ",
+                "task_types": ["crawler"],
+                "priority": "medium",
+            },
+        )
+    )
+    payload = parse_json(response)
+
+    assert response.status == 400
+    assert "target_id" in payload["error"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "bad_target_id",
+    [123, {"id": "t1"}, []],
+)
+async def test_handle_task_queue_rejects_non_string_target_id(bad_target_id):
+    worker = BLTWorker(SimpleNamespace(DB=None))
+
+    response = await worker.handle_task_queue(
+        FakeRequest(
+            "https://api.example.com/api/tasks/queue",
+            method="POST",
+            payload={
+                "target_id": bad_target_id,
+                "task_types": ["crawler"],
+                "priority": "medium",
+            },
+        )
+    )
+    payload = parse_json(response)
+
+    assert response.status == 400
+    assert payload["error"] == "target_id must be a non-empty string"
+
+
+@pytest.mark.asyncio
+async def test_handle_task_queue_rejects_non_list_task_types():
+    worker = BLTWorker(SimpleNamespace(DB=None))
+
+    response = await worker.handle_task_queue(
+        FakeRequest(
+            "https://api.example.com/api/tasks/queue",
+            method="POST",
+            payload={
+                "target_id": "target-1",
+                "task_types": "crawler",
+                "priority": "medium",
+            },
+        )
+    )
+    payload = parse_json(response)
+
+    assert response.status == 400
+    assert "task_types" in payload["error"].lower()
+
+
+@pytest.mark.asyncio
 async def test_handle_target_registration_persists_target():
     worker = BLTWorker(SimpleNamespace(DB=None))
     worker.target_registry = SimpleNamespace(save_target=AsyncMock())
@@ -184,6 +321,110 @@ async def test_handle_target_registration_persists_target():
     assert saved_target["target_type"] == "web2"
     assert saved_target["target_url"] == "https://example.com"
     assert saved_target["scan_types"] == ["crawler"]
+
+
+@pytest.mark.asyncio
+async def test_handle_target_registration_reports_only_missing_target_type():
+    worker = BLTWorker(SimpleNamespace(DB=None))
+
+    response = await worker.handle_target_registration(
+        FakeRequest(
+            "https://api.example.com/api/targets/register",
+            method="POST",
+            payload={
+                "target": "https://example.com",
+                "scan_types": ["crawler"],
+            },
+        )
+    )
+    payload = parse_json(response)
+
+    assert response.status == 400
+    assert payload["error"] == "Missing required fields: target_type"
+
+
+@pytest.mark.asyncio
+async def test_handle_target_registration_reports_only_missing_target():
+    worker = BLTWorker(SimpleNamespace(DB=None))
+
+    response = await worker.handle_target_registration(
+        FakeRequest(
+            "https://api.example.com/api/targets/register",
+            method="POST",
+            payload={
+                "target_type": "web2",
+                "scan_types": ["crawler"],
+            },
+        )
+    )
+    payload = parse_json(response)
+
+    assert response.status == 400
+    assert payload["error"] == "Missing required fields: target"
+
+
+@pytest.mark.asyncio
+async def test_handle_target_registration_rejects_invalid_target_type():
+    worker = BLTWorker(SimpleNamespace(DB=None))
+
+    response = await worker.handle_target_registration(
+        FakeRequest(
+            "https://api.example.com/api/targets/register",
+            method="POST",
+            payload={
+                "target_type": "desktop_app",
+                "target": "https://example.com",
+                "scan_types": ["crawler"],
+            },
+        )
+    )
+    payload = parse_json(response)
+
+    assert response.status == 400
+    assert "target_type" in payload["error"].lower()
+
+
+@pytest.mark.asyncio
+async def test_handle_target_registration_rejects_unknown_scan_type():
+    worker = BLTWorker(SimpleNamespace(DB=None))
+
+    response = await worker.handle_target_registration(
+        FakeRequest(
+            "https://api.example.com/api/targets/register",
+            method="POST",
+            payload={
+                "target_type": "web2",
+                "target": "https://example.com",
+                "scan_types": ["crawler", "typo_scanner"],
+            },
+        )
+    )
+    payload = parse_json(response)
+
+    assert response.status == 400
+    assert "scan_types" in payload["error"].lower()
+
+
+@pytest.mark.asyncio
+async def test_handle_target_registration_rejects_oversized_target():
+    worker = BLTWorker(SimpleNamespace(DB=None))
+    huge = "https://example.com/" + ("a" * 5000)
+
+    response = await worker.handle_target_registration(
+        FakeRequest(
+            "https://api.example.com/api/targets/register",
+            method="POST",
+            payload={
+                "target_type": "web2",
+                "target": huge,
+                "scan_types": ["crawler"],
+            },
+        )
+    )
+    payload = parse_json(response)
+
+    assert response.status == 400
+    assert "maximum length" in payload["error"].lower()
 
 
 @pytest.mark.asyncio
@@ -341,6 +582,56 @@ async def test_handle_job_status_calculates_progress_percentage():
     assert response.status == 200
     assert payload["job_id"] == "job-1"
     assert payload["progress"] == 25
+
+
+@pytest.mark.asyncio
+async def test_handle_job_status_returns_404_when_job_missing():
+    worker = BLTWorker(SimpleNamespace(DB=None))
+    worker.job_store = SimpleNamespace(get_job=AsyncMock(return_value=None))
+
+    response = await worker.handle_job_status(
+        FakeRequest("https://api.example.com/api/jobs/status?job_id=missing-job")
+    )
+    payload = parse_json(response)
+
+    assert response.status == 404
+    assert payload["error"] == "Job not found"
+
+
+@pytest.mark.asyncio
+async def test_handle_task_list_returns_404_when_job_missing():
+    worker = BLTWorker(SimpleNamespace(DB=None))
+    worker.job_store = SimpleNamespace(get_job=AsyncMock(return_value=None))
+
+    response = await worker.handle_task_list(
+        FakeRequest("https://api.example.com/api/tasks/list?job_id=missing-job")
+    )
+    payload = parse_json(response)
+
+    assert response.status == 404
+    assert payload["error"] == "Job not found"
+
+
+@pytest.mark.asyncio
+async def test_handle_result_ingestion_rejects_unknown_task():
+    worker = BLTWorker(SimpleNamespace(DB=None))
+    worker.task_queue = SimpleNamespace(get_task=AsyncMock(return_value=None))
+
+    response = await worker.handle_result_ingestion(
+        FakeRequest(
+            "https://api.example.com/api/results/ingest",
+            method="POST",
+            payload={
+                "task_id": "no-such-task",
+                "agent_type": "static_analyzer",
+                "results": {"vulnerabilities": []},
+            },
+        )
+    )
+    payload = parse_json(response)
+
+    assert response.status == 400
+    assert payload["error"] == "Unknown task_id"
 
 
 @pytest.mark.asyncio

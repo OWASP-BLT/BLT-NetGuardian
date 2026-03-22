@@ -4,7 +4,12 @@ from types import SimpleNamespace
 import sys
 import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from scanners.coordinator import ScannerCoordinator, register_scanner, _SCANNER_REGISTRY
+from scanners.coordinator import (
+    ScannerCoordinator,
+    register_scanner,
+    _SCANNER_REGISTRY,
+    get_registered_task_types,
+)
 
 
 class FakeScanner:
@@ -122,3 +127,7 @@ async def test_process_job_returns_all_results():
     results = await coordinator.process_job("job-1", tasks)
     assert len(results) == 2
     assert all(r["success"] is True for r in results)
+
+
+def test_get_registered_task_types_matches_scanner_registry():
+    assert get_registered_task_types() == frozenset(_SCANNER_REGISTRY.keys())
