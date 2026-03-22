@@ -1,6 +1,6 @@
 """Volunteer agent manager for community security testing."""
 from typing import Dict, Any, List
-from datetime import datetime
+from utils.utc_time import utc_now_iso
 
 
 class VolunteerAgentManager:
@@ -41,7 +41,7 @@ class VolunteerAgentManager:
                 'agents_notified': 0,
                 'submissions_received': 0,
                 'tasks_distributed': 1,
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': utc_now_iso()
             }
         }
     
@@ -50,7 +50,7 @@ class VolunteerAgentManager:
         # Validate and register agent
         self.active_agents.append({
             'agent_id': agent_id,
-            'registered_at': datetime.utcnow().isoformat(),
+            'registered_at': utc_now_iso(),
             **agent_info
         })
         return True

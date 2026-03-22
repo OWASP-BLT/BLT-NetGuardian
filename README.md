@@ -469,6 +469,8 @@ vulnerabilities.forEach(vuln => {
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
+**Timestamps:** Do not use `datetime.utcnow()` (deprecated). Use `utils.utc_time.utc_now_iso()` for stored/API times (ISO 8601 with `Z`) or `utc_now()` when you need a timezone-aware `datetime` (e.g. `strftime`).
+
 ## License
 
 This project is licensed under the GNU Affero General Public License v3.0 - see the [LICENSE](LICENSE) file for details.

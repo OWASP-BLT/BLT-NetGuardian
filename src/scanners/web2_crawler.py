@@ -1,6 +1,6 @@
 """Web2 crawler for scanning web applications."""
 from typing import Dict, Any
-from datetime import datetime
+from utils.utc_time import utc_now_iso
 
 
 class Web2Crawler:
@@ -49,7 +49,7 @@ class Web2Crawler:
                 'forms_found': 0,
                 'apis_discovered': 0,
                 'scan_duration': '0s',
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': utc_now_iso()
             }
         }
     

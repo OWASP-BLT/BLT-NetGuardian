@@ -1,6 +1,6 @@
 """Web3 blockchain and smart contract monitor."""
 from typing import Dict, Any
-from datetime import datetime
+from utils.utc_time import utc_now_iso
 
 
 class Web3Monitor:
@@ -42,7 +42,7 @@ class Web3Monitor:
                 'contract_address': task.target_id,
                 'transactions_analyzed': 0,
                 'blocks_scanned': 0,
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': utc_now_iso()
             }
         }
     
