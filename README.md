@@ -426,6 +426,7 @@ vulnerabilities.forEach(vuln => {
 
 ## Security Considerations
 
+- See **[SECURITY.md](SECURITY.md)** for target/suggestion validation, metadata SSRF mitigations, and `ALLOW_PRIVATE_SCAN_TARGETS`.
 - All API endpoints support CORS for web interface access
 - Task deduplication prevents redundant scanning
 - Vulnerability data is stored with 30-day expiration

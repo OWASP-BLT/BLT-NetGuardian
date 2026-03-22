@@ -6,10 +6,18 @@ https://your-worker.workers.dev
 ```
 
 ## Authentication
-Currently, all endpoints are open. In production, implement authentication using:
-- API keys
-- JWT tokens
-- Cloudflare Access
+When the worker has **`API_SECRET`** configured, every **mutating** API route (`POST`, `PUT`, `PATCH`, `DELETE` under `/api/...`) requires credentials:
+
+- Header **`X-API-Key: <secret>`**, or  
+- Header **`Authorization: Bearer <secret>`**
+
+If **`API_SECRET` is not set**, mutating requests receive **`503`** with `API authentication is not configured`. Invalid or missing credentials receive **`401`**.
+
+Read-only `GET` routes may also require auth when **`AUTHENTICATE_READ_ENDPOINTS`** is enabled (see `worker.py`).
+
+Browser calls must send an **`Origin`** allowed by **`CORS_ALLOWED_ORIGINS`** / **`CORS_ALLOWED_ORIGIN`**; otherwise the worker responds with **`403`**.
+
+For local demos without secrets, leave `API_SECRET` unset and use same-origin or allowed origins only.
 
 ## Endpoints
 
@@ -32,9 +40,9 @@ Queue new security scanning tasks for a target.
 **Request Body:**
 ```json
 {
-  "target_id": "string (required)",
+  "target_id": "string (required; non-string JSON values are rejected)",
   "task_types": ["string"] (required),
-  "priority": "low|medium|high (optional, default: medium)"
+  "priority": "low|medium|high (optional, default: medium; case-insensitive, surrounding whitespace ignored)"
 }
 ```
 
@@ -58,7 +66,7 @@ Queue new security scanning tasks for a target.
 ```
 
 **Errors:**
-- `400` - Missing required fields
+- `400` - Missing required fields, non-string `target_id`, invalid `priority`, invalid `task_types` (must be a non-empty array of known scanner task types), or unknown task type strings
 - `500` - Failed to queue tasks
 
 ---
@@ -96,8 +104,24 @@ Register a new scan target in the system.
 ```
 
 **Errors:**
-- `400` - Missing required fields
+- `400` - Missing required fields, invalid `target_type`, `target` too long (max 4096 characters), disallowed host/IP (see **SECURITY.md**), non-array `scan_types`, or unknown entries in `scan_types`
 - `500` - Failed to register target
+
+---
+
+### 3b. Suggest discovery target
+
+**POST /api/discovery/suggest**
+
+**Authentication:** Same as other mutating routes — `X-API-Key` or `Authorization: Bearer` when `API_SECRET` is set (see **Authentication** above).
+
+**Request body:** `{ "suggestion": "string (required)", "priority": boolean (optional) }`
+
+**Errors:**
+- `400` - Missing `suggestion`, invalid type, over max length, or disallowed host/IP (loopback, private IPs, cloud metadata patterns — unless `ALLOW_PRIVATE_SCAN_TARGETS=true`)
+- `401` - Missing or invalid API credentials when `API_SECRET` is configured
+- `403` - `Origin` not allowed (browser CORS)
+- `503` - `API_SECRET` not configured (mutating auth unavailable)
 
 ---
 
@@ -152,7 +176,7 @@ Submit scan results from security scanning agents.
 ```
 
 **Errors:**
-- `400` - Missing required fields
+- `400` - Missing required fields, invalid payload structure, or unknown `task_id`
 - `500` - Failed to ingest results
 
 ---

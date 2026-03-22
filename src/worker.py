@@ -21,11 +21,12 @@ except ImportError:
             self.headers = dict(headers or {})
 
 from models.task import Task, TaskStatus
-from models.target import Target
+from models.target import Target, TargetType
 from models.result import ScanResult
 from utils.deduplication import TaskDeduplicator
+from utils.input_validation import validate_user_target_input
 from utils.storage import JobStateStore, TaskQueueStore, TargetRegistryStore, VulnerabilityDatabase
-from scanners.coordinator import ScannerCoordinator
+from scanners.coordinator import ScannerCoordinator, get_registered_task_types
 from scanners.autonomous_discovery import AutonomousDiscovery
 from scanners.contact_notifier import ContactNotifier
 
@@ -34,6 +35,8 @@ class BLTWorker:
     """Main BLT-NetGuardian Worker class - API only."""
 
     MAX_LIMIT = 100
+    MAX_TARGET_URL_LEN = 4096
+    ALLOWED_PRIORITIES = frozenset({'low', 'medium', 'high'})
     DEFAULT_ALLOWED_ORIGIN = 'https://owasp-blt.github.io'
     MUTATING_METHODS = {'POST', 'PUT', 'PATCH', 'DELETE'}
     
@@ -49,6 +52,10 @@ class BLTWorker:
         self.coordinator = ScannerCoordinator()
         self.discovery = AutonomousDiscovery()
         self.notifier = ContactNotifier()
+
+    def allow_private_scan_targets(self) -> bool:
+        """Allow private/loopback targets when self-hosting (see SECURITY.md)."""
+        return self.get_boolean_env('ALLOW_PRIVATE_SCAN_TARGETS', default=False)
     
     async def handle_request(self, request):
         """Route incoming requests to appropriate handlers."""
@@ -118,10 +125,20 @@ class BLTWorker:
             suggestion = data.get('suggestion')
             priority = data.get('priority', False)
             
-            if not suggestion:
+            if suggestion is None or (isinstance(suggestion, str) and not suggestion.strip()):
                 return self.json_response({
                     'error': 'Missing required field: suggestion'
                 }, status=400)
+
+            normalized, err = validate_user_target_input(
+                suggestion,
+                max_len=self.MAX_TARGET_URL_LEN,
+                allow_private_hosts=self.allow_private_scan_targets(),
+                field_name='suggestion',
+            )
+            if err:
+                return self.json_response({'error': err}, status=400)
+            suggestion = normalized
             
             # Process the suggestion through autonomous discovery
             discovery_record = await self.discovery.process_user_suggestion(
@@ -234,8 +251,18 @@ class BLTWorker:
         try:
             data = await request.json()
             target_id = data.get('target_id')
+            if target_id is None:
+                target_id = ''
+            elif not isinstance(target_id, str):
+                return self.json_response({
+                    'error': 'target_id must be a non-empty string'
+                }, status=400)
+            else:
+                target_id = target_id.strip()
             task_types = data.get('task_types', [])
             priority = data.get('priority', 'medium')
+            if isinstance(priority, str):
+                priority = priority.strip().lower()
             
             missing_fields = []
             if not target_id:
@@ -247,6 +274,32 @@ class BLTWorker:
                 return self.json_response({
                     'error': f"Missing required fields: {', '.join(missing_fields)}"
                 }, status=400)
+
+            if not isinstance(priority, str) or priority not in self.ALLOWED_PRIORITIES:
+                return self.json_response({
+                    'error': 'Invalid priority: must be one of low, medium, high'
+                }, status=400)
+
+            if not isinstance(task_types, list):
+                return self.json_response({
+                    'error': 'task_types must be a non-empty array of strings'
+                }, status=400)
+
+            allowed_task_types = get_registered_task_types()
+            normalized_types: List[str] = []
+            for tt in task_types:
+                if not isinstance(tt, str) or not tt.strip():
+                    return self.json_response({
+                        'error': 'Each task_types entry must be a non-empty string'
+                    }, status=400)
+                normalized_types.append(tt.strip())
+            unknown = sorted({t for t in normalized_types if t not in allowed_task_types})
+            if unknown:
+                return self.json_response({
+                    'error': f"Unknown task_types: {', '.join(unknown)}. "
+                    f"Allowed: {', '.join(sorted(allowed_task_types))}"
+                }, status=400)
+            task_types = normalized_types
             
             # Generate job ID
             job_id = self.generate_id(f"job-{target_id}-{datetime.utcnow().isoformat()}")
@@ -310,11 +363,64 @@ class BLTWorker:
             data = await request.json()
             target_type = data.get('target_type')
             target = data.get('target')
-            
-            if not target_type or not target:
+
+            missing_reg_fields: List[str] = []
+            if target_type is None or target_type == '':
+                missing_reg_fields.append('target_type')
+            if target is None or target == '':
+                missing_reg_fields.append('target')
+            if missing_reg_fields:
                 return self.json_response({
-                    'error': 'Missing required fields: target_type, target'
+                    'error': f"Missing required fields: {', '.join(missing_reg_fields)}"
                 }, status=400)
+
+            if not isinstance(target_type, str) or not target_type.strip():
+                return self.json_response({
+                    'error': 'target_type must be a non-empty string'
+                }, status=400)
+            target_type = target_type.strip()
+            allowed_target_types = {e.value for e in TargetType}
+            if target_type not in allowed_target_types:
+                return self.json_response({
+                    'error': f"Invalid target_type: must be one of {', '.join(sorted(allowed_target_types))}"
+                }, status=400)
+
+            if not isinstance(target, str) or not target.strip():
+                return self.json_response({
+                    'error': 'target must be a non-empty string'
+                }, status=400)
+            normalized_target, terr = validate_user_target_input(
+                target,
+                max_len=self.MAX_TARGET_URL_LEN,
+                allow_private_hosts=self.allow_private_scan_targets(),
+                field_name='target',
+            )
+            if terr:
+                return self.json_response({'error': terr}, status=400)
+            target = normalized_target
+
+            scan_types_raw = data.get('scan_types', [])
+            if scan_types_raw is None:
+                scan_types: List[str] = []
+            elif not isinstance(scan_types_raw, list):
+                return self.json_response({
+                    'error': 'scan_types must be an array of strings'
+                }, status=400)
+            else:
+                allowed_scan = get_registered_task_types()
+                scan_types = []
+                for s in scan_types_raw:
+                    if not isinstance(s, str) or not s.strip():
+                        return self.json_response({
+                            'error': 'Each scan_types entry must be a non-empty string'
+                        }, status=400)
+                    key = s.strip()
+                    if key not in allowed_scan:
+                        return self.json_response({
+                            'error': f"Unknown scan_types: {key}. "
+                            f"Allowed: {', '.join(sorted(allowed_scan))}"
+                        }, status=400)
+                    scan_types.append(key)
             
             # Generate target ID
             target_id = self.generate_id(f"{target_type}-{target}")
@@ -324,7 +430,7 @@ class BLTWorker:
                 target_id=target_id,
                 target_type=target_type,
                 target_url=target,
-                scan_types=data.get('scan_types', []),
+                scan_types=scan_types,
                 notes=data.get('notes', ''),
                 registered_at=datetime.utcnow().isoformat()
             )
