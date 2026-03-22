@@ -236,8 +236,12 @@ class BLTWorker:
         try:
             data = await request.json()
             target_id = data.get('target_id')
+            if isinstance(target_id, str):
+                target_id = target_id.strip()
             task_types = data.get('task_types', [])
             priority = data.get('priority', 'medium')
+            if isinstance(priority, str):
+                priority = priority.strip().lower()
             
             missing_fields = []
             if not target_id:

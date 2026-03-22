@@ -34,7 +34,7 @@ Queue new security scanning tasks for a target.
 {
   "target_id": "string (required)",
   "task_types": ["string"] (required),
-  "priority": "low|medium|high (optional, default: medium)"
+  "priority": "low|medium|high (optional, default: medium; case-insensitive, surrounding whitespace ignored)"
 }
 ```
 

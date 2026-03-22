@@ -202,6 +202,54 @@ async def test_handle_task_queue_rejects_invalid_priority():
 
 
 @pytest.mark.asyncio
+async def test_handle_task_queue_normalizes_priority_case_and_whitespace():
+    """Priority is compared case-insensitively after strip (common client mistake)."""
+    worker = BLTWorker(SimpleNamespace(DB=None))
+    worker.deduplicator = SimpleNamespace(is_duplicate=AsyncMock(return_value=False))
+    worker.task_queue = SimpleNamespace(save_task=AsyncMock())
+    worker.job_store = SimpleNamespace(save_job=AsyncMock())
+    worker.coordinator = SimpleNamespace(process_job=AsyncMock())
+
+    response = await worker.handle_task_queue(
+        FakeRequest(
+            "https://api.example.com/api/tasks/queue",
+            method="POST",
+            payload={
+                "target_id": "target-1",
+                "task_types": ["crawler"],
+                "priority": "  HIGH  ",
+            },
+        )
+    )
+    payload = parse_json(response)
+
+    assert response.status == 200
+    _, queued_tasks = worker.coordinator.process_job.await_args.args
+    assert queued_tasks[0].priority == "high"
+
+
+@pytest.mark.asyncio
+async def test_handle_task_queue_rejects_whitespace_only_target_id():
+    worker = BLTWorker(SimpleNamespace(DB=None))
+
+    response = await worker.handle_task_queue(
+        FakeRequest(
+            "https://api.example.com/api/tasks/queue",
+            method="POST",
+            payload={
+                "target_id": "   ",
+                "task_types": ["crawler"],
+                "priority": "medium",
+            },
+        )
+    )
+    payload = parse_json(response)
+
+    assert response.status == 400
+    assert "target_id" in payload["error"]
+
+
+@pytest.mark.asyncio
 async def test_handle_task_queue_rejects_non_list_task_types():
     worker = BLTWorker(SimpleNamespace(DB=None))
 
