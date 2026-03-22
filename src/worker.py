@@ -36,6 +36,14 @@ class BLTWorker:
     MAX_LIMIT = 100
     DEFAULT_ALLOWED_ORIGIN = 'https://owasp-blt.github.io'
     MUTATING_METHODS = {'POST', 'PUT', 'PATCH', 'DELETE'}
+    # Applied to every JSON API response and CORS preflight (defense-in-depth at the app layer).
+    API_SECURITY_HEADERS: Dict[str, str] = {
+        'X-Content-Type-Options': 'nosniff',
+        'X-Frame-Options': 'DENY',
+        'Referrer-Policy': 'strict-origin-when-cross-origin',
+        'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+        'Cache-Control': 'no-store',
+    }
     
     def __init__(self, env):
         """Initialize the worker with Cloudflare environment bindings."""
@@ -60,9 +68,10 @@ class BLTWorker:
 
         # Handle CORS preflight
         if method == 'OPTIONS':
+            opt_headers = {**self.API_SECURITY_HEADERS, **cors_headers}
             if not self.is_allowed_origin(request):
-                return Response('', status=403, headers=cors_headers)
-            return Response('', status=200, headers=cors_headers)
+                return Response('', status=403, headers=opt_headers)
+            return Response('', status=200, headers=opt_headers)
 
         if not self.is_allowed_origin(request):
             return self.json_response({'error': 'Origin not allowed'}, status=403, headers=cors_headers)
@@ -656,11 +665,11 @@ class BLTWorker:
     
     def json_response(self, data: Dict[str, Any], status: int = 200,
                      headers: Optional[Dict[str, str]] = None) -> 'Response':
-        """Create a JSON response."""
-        response_headers = {'Content-Type': 'application/json'}
+        """Create a JSON response with baseline security headers."""
+        response_headers = {**self.API_SECURITY_HEADERS, 'Content-Type': 'application/json'}
         if headers:
             response_headers.update(headers)
-        
+
         return Response(
             json.dumps(data),
             status=status,

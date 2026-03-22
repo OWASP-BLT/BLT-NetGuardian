@@ -426,6 +426,7 @@ vulnerabilities.forEach(vuln => {
 
 ## Security Considerations
 
+- JSON API responses (and `OPTIONS` preflight) include baseline headers: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`, and `Cache-Control: no-store` (see `API.md`)
 - All API endpoints support CORS for web interface access
 - Task deduplication prevents redundant scanning
 - Vulnerability data is stored with 30-day expiration
