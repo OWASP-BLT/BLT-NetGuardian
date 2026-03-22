@@ -10,6 +10,10 @@ const CONFIG = {
     
     // API endpoints
     ENDPOINTS: {
+        HEALTH: '/api/health',
+        DISCOVERY_SUGGEST: '/api/discovery/suggest',
+        DISCOVERY_STATUS: '/api/discovery/status',
+        DISCOVERY_RECENT: '/api/discovery/recent',
         QUEUE_TASKS: '/api/tasks/queue',
         REGISTER_TARGET: '/api/targets/register',
         INGEST_RESULTS: '/api/results/ingest',
@@ -54,7 +58,7 @@ async function apiRequest(endpoint, options = {}) {
                 error: 'Request failed',
                 message: `HTTP ${response.status}: ${response.statusText}`
             }));
-            throw new Error(errorData.message || errorData.error || 'Request failed');
+            throw new Error(errorData.error || errorData.message || 'Request failed');
         }
         
         return await response.json();

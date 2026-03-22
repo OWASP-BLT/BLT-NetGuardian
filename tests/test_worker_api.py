@@ -31,10 +31,11 @@ from worker import BLTWorker, on_fetch  # noqa: E402
 class FakeRequest:
     """Minimal request object for worker handler tests."""
 
-    def __init__(self, url, method="GET", payload=None):
+    def __init__(self, url, method="GET", payload=None, headers=None):
         self.url = url
         self.method = method
         self._payload = payload
+        self.headers = headers or {}
 
     async def json(self):
         return self._payload or {}
@@ -433,3 +434,64 @@ async def test_handle_request_requires_authentication_for_read_endpoints_by_defa
 
     assert response.status == 503
     assert payload["error"] == "API authentication is not configured"
+
+
+@pytest.mark.asyncio
+async def test_handle_health_get_returns_ok():
+    worker = BLTWorker(SimpleNamespace(DB=None, WORKER_VERSION="test-9"))
+
+    response = await worker.handle_health(
+        FakeRequest("https://api.example.com/api/health", method="GET")
+    )
+    payload = parse_json(response)
+
+    assert response.status == 200
+    assert payload["status"] == "ok"
+    assert payload["service"] == "BLT-NetGuardian"
+    assert payload["version"] == "test-9"
+    assert "timestamp" in payload
+    assert payload["timestamp"].endswith("Z")
+
+
+@pytest.mark.asyncio
+async def test_handle_health_rejects_non_get():
+    worker = BLTWorker(SimpleNamespace(DB=None))
+
+    response = await worker.handle_health(
+        FakeRequest("https://api.example.com/api/health", method="POST")
+    )
+    payload = parse_json(response)
+
+    assert response.status == 405
+    assert payload["error"] == "Method not allowed"
+
+
+@pytest.mark.asyncio
+async def test_handle_request_health_skips_authentication_when_reads_are_protected():
+    """Load balancers and uptime checks must reach /api/health without API_SECRET."""
+    worker = BLTWorker(
+        SimpleNamespace(DB=None, API_SECRET="super-secret", AUTHENTICATE_READ_ENDPOINTS="true")
+    )
+
+    response = await worker.handle_request(
+        FakeRequest("https://api.example.com/api/health", method="GET")
+    )
+    payload = parse_json(response)
+
+    assert response.status == 200
+    assert payload["status"] == "ok"
+
+
+@pytest.mark.asyncio
+async def test_handle_request_protected_read_still_requires_auth_when_secret_configured():
+    worker = BLTWorker(
+        SimpleNamespace(DB=None, API_SECRET="super-secret", AUTHENTICATE_READ_ENDPOINTS="true")
+    )
+
+    response = await worker.handle_request(
+        FakeRequest("https://api.example.com/api/jobs/status?job_id=job-1", method="GET")
+    )
+    payload = parse_json(response)
+
+    assert response.status == 401
+    assert payload["error"] == "Unauthorized"

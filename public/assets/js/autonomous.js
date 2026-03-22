@@ -34,7 +34,7 @@ async function handleSuggestionSubmit(e) {
     submitButton.textContent = 'Submitting...';
 
     try {
-        const response = await apiRequest('/api/discovery/suggest', {
+        const response = await apiRequest(CONFIG.ENDPOINTS.DISCOVERY_SUGGEST, {
             method: 'POST',
             body: JSON.stringify({
                 suggestion,
@@ -73,7 +73,7 @@ async function handleSuggestionSubmit(e) {
 
 async function loadScanningStatus() {
     try {
-        const status = await apiRequest('/api/discovery/status');
+        const status = await apiRequest(CONFIG.ENDPOINTS.DISCOVERY_STATUS);
 
         if (status.current_target) {
             document.getElementById('scanningTarget').innerHTML =
@@ -101,7 +101,7 @@ async function loadScanningStatus() {
 
 async function loadRecentDiscoveries() {
     try {
-        const response = await apiRequest('/api/discovery/recent?limit=10');
+        const response = await apiRequest(`${CONFIG.ENDPOINTS.DISCOVERY_RECENT}?limit=10`);
 
         if (response.discoveries && response.discoveries.length > 0) {
             allDiscoveries = response.discoveries;
