@@ -1,6 +1,6 @@
 """Static code analyzer for security vulnerabilities."""
 from typing import Dict, Any
-from datetime import datetime
+from utils.utc_time import utc_now_iso
 
 
 class StaticAnalyzer:
@@ -53,7 +53,7 @@ class StaticAnalyzer:
                 'files_analyzed': 0,
                 'lines_of_code': 0,
                 'dependencies_checked': 0,
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': utc_now_iso()
             }
         }
     

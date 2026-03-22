@@ -3,7 +3,8 @@ Contact notification module for BLT-NetGuardian.
 Automatically contacts stakeholders when vulnerabilities are found.
 """
 from typing import Dict, Any, List, Optional
-from datetime import datetime
+
+from utils.utc_time import utc_now, utc_now_iso
 
 
 class ContactNotifier:
@@ -62,7 +63,7 @@ class ContactNotifier:
             'vulnerability_count': len(vulnerabilities),
             'contact_attempts': len(attempts),
             'successful_contacts': len([a for a in attempts if a.get('success')]),
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': utc_now_iso(),
             'attempts': attempts
         }
         
@@ -218,8 +219,8 @@ class ContactNotifier:
             "",
             "Best regards,",
             "BLT-NetGuardian Autonomous Security Team",
-            f"Report ID: {datetime.utcnow().strftime('%Y%m%d-%H%M%S')}",
-            f"Scan Date: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}"
+            f"Report ID: {utc_now().strftime('%Y%m%d-%H%M%S')}",
+            f"Scan Date: {utc_now().strftime('%Y-%m-%d %H:%M:%S UTC')}"
         ])
         
         return "\n".join(report_lines)
@@ -239,7 +240,7 @@ class ContactNotifier:
             'method': method,
             'contact_info': contact_info,
             'success': True,
-            'sent_at': datetime.utcnow().isoformat(),
+            'sent_at': utc_now_iso(),
             'message': f'Notification sent via {method}'
         }
     
@@ -274,7 +275,7 @@ class ContactNotifier:
                 'vulnerability_count': 7,
                 'contact_attempts': 3,
                 'successful_contacts': 2,
-                'timestamp': datetime.utcnow().isoformat(),
+                'timestamp': utc_now_iso(),
                 'status': 'contacted'
             }
         ]

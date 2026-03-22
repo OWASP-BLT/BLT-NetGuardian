@@ -1,6 +1,6 @@
 """Smart contract security scanner."""
 from typing import Dict, Any
-from datetime import datetime
+from utils.utc_time import utc_now_iso
 
 
 class ContractScanner:
@@ -43,7 +43,7 @@ class ContractScanner:
                 'functions_analyzed': 0,
                 'modifiers_checked': 0,
                 'security_checks_passed': 0,
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': utc_now_iso()
             }
         }
     

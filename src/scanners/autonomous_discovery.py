@@ -3,8 +3,9 @@ Autonomous discovery module for BLT-NetGuardian.
 Continuously discovers new targets from various sources.
 """
 from typing import Dict, Any, List
-from datetime import datetime
 import hashlib
+
+from utils.utc_time import utc_now_iso
 
 
 class AutonomousDiscovery:
@@ -72,11 +73,11 @@ class AutonomousDiscovery:
             'target': domain,
             'type': 'domain',
             'source': 'certificate_transparency',
-            'discovered_at': datetime.utcnow().isoformat(),
+            'discovered_at': utc_now_iso(),
             'priority': 'normal',
             'metadata': {
                 'issuer': 'Let\'s Encrypt',
-                'first_seen': datetime.utcnow().isoformat()
+                'first_seen': utc_now_iso()
             }
         } for domain in sample_domains[:limit]]
     
@@ -102,12 +103,12 @@ class AutonomousDiscovery:
             'target': repo,
             'type': 'repository',
             'source': 'github_trending',
-            'discovered_at': datetime.utcnow().isoformat(),
+            'discovered_at': utc_now_iso(),
             'priority': 'normal',
             'metadata': {
                 'stars': 0,
                 'language': 'python',
-                'last_updated': datetime.utcnow().isoformat()
+                'last_updated': utc_now_iso()
             }
         } for repo in sample_repos[:limit]]
     
@@ -131,7 +132,7 @@ class AutonomousDiscovery:
             'target': contract,
             'type': 'smart_contract',
             'source': 'blockchain_monitoring',
-            'discovered_at': datetime.utcnow().isoformat(),
+            'discovered_at': utc_now_iso(),
             'priority': 'high',  # Blockchain contracts are high priority
             'metadata': {
                 'network': 'ethereum',
@@ -156,7 +157,7 @@ class AutonomousDiscovery:
         
         # Generate discovery ID
         discovery_id = hashlib.sha256(
-            f"{suggestion}-{datetime.utcnow().isoformat()}".encode()
+            f"{suggestion}-{utc_now_iso()}".encode()
         ).hexdigest()[:16]
         
         return {
@@ -164,7 +165,7 @@ class AutonomousDiscovery:
             'target': suggestion,
             'type': target_type,
             'source': 'user_suggestion',
-            'discovered_at': datetime.utcnow().isoformat(),
+            'discovered_at': utc_now_iso(),
             'priority': 'high' if priority else 'normal',
             'status': 'queued',
             'metadata': {
@@ -211,6 +212,6 @@ class AutonomousDiscovery:
         return {
             'target': 'example.com',
             'type': 'domain',
-            'started_at': datetime.utcnow().isoformat(),
+            'started_at': utc_now_iso(),
             'scan_types': ['crawler', 'vulnerability_scan']
         }
