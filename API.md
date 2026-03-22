@@ -32,7 +32,7 @@ Queue new security scanning tasks for a target.
 **Request Body:**
 ```json
 {
-  "target_id": "string (required)",
+  "target_id": "string (required; non-string JSON values are rejected)",
   "task_types": ["string"] (required),
   "priority": "low|medium|high (optional, default: medium; case-insensitive, surrounding whitespace ignored)"
 }
@@ -58,7 +58,7 @@ Queue new security scanning tasks for a target.
 ```
 
 **Errors:**
-- `400` - Missing required fields, invalid `priority`, invalid `task_types` (must be a non-empty array of known scanner task types), or unknown task type strings
+- `400` - Missing required fields, non-string `target_id`, invalid `priority`, invalid `task_types` (must be a non-empty array of known scanner task types), or unknown task type strings
 - `500` - Failed to queue tasks
 
 ---

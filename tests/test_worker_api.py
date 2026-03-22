@@ -251,6 +251,31 @@ async def test_handle_task_queue_rejects_whitespace_only_target_id():
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "bad_target_id",
+    [123, {"id": "t1"}, []],
+)
+async def test_handle_task_queue_rejects_non_string_target_id(bad_target_id):
+    worker = BLTWorker(SimpleNamespace(DB=None))
+
+    response = await worker.handle_task_queue(
+        FakeRequest(
+            "https://api.example.com/api/tasks/queue",
+            method="POST",
+            payload={
+                "target_id": bad_target_id,
+                "task_types": ["crawler"],
+                "priority": "medium",
+            },
+        )
+    )
+    payload = parse_json(response)
+
+    assert response.status == 400
+    assert payload["error"] == "target_id must be a non-empty string"
+
+
+@pytest.mark.asyncio
 async def test_handle_task_queue_rejects_non_list_task_types():
     worker = BLTWorker(SimpleNamespace(DB=None))
 
@@ -297,6 +322,46 @@ async def test_handle_target_registration_persists_target():
     assert saved_target["target_type"] == "web2"
     assert saved_target["target_url"] == "https://example.com"
     assert saved_target["scan_types"] == ["crawler"]
+
+
+@pytest.mark.asyncio
+async def test_handle_target_registration_reports_only_missing_target_type():
+    worker = BLTWorker(SimpleNamespace(DB=None))
+
+    response = await worker.handle_target_registration(
+        FakeRequest(
+            "https://api.example.com/api/targets/register",
+            method="POST",
+            payload={
+                "target": "https://example.com",
+                "scan_types": ["crawler"],
+            },
+        )
+    )
+    payload = parse_json(response)
+
+    assert response.status == 400
+    assert payload["error"] == "Missing required fields: target_type"
+
+
+@pytest.mark.asyncio
+async def test_handle_target_registration_reports_only_missing_target():
+    worker = BLTWorker(SimpleNamespace(DB=None))
+
+    response = await worker.handle_target_registration(
+        FakeRequest(
+            "https://api.example.com/api/targets/register",
+            method="POST",
+            payload={
+                "target_type": "web2",
+                "scan_types": ["crawler"],
+            },
+        )
+    )
+    payload = parse_json(response)
+
+    assert response.status == 400
+    assert payload["error"] == "Missing required fields: target"
 
 
 @pytest.mark.asyncio
