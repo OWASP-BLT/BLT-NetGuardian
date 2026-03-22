@@ -5,7 +5,7 @@ Serves the frontend (public/) as static assets and handles the backend API.
 import json
 import hashlib
 import hmac
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional, Tuple
 from urllib.parse import parse_qs
 try:
@@ -78,7 +78,9 @@ class BLTWorker:
 
         try:
             # Route to appropriate handler - API routes only
-            if path == 'api/discovery/suggest':
+            if path == 'api/health':
+                response = await self.handle_health(request)
+            elif path == 'api/discovery/suggest':
                 response = await self.handle_discovery_suggest(request)
             elif path == 'api/discovery/status':
                 response = await self.handle_discovery_status(request)
@@ -107,6 +109,20 @@ class BLTWorker:
 
         except Exception as e:
             return self.internal_error_response('Internal server error', e, headers=cors_headers)
+
+    async def handle_health(self, request):
+        """Liveness probe for operators and load balancers; does not require API authentication."""
+        if request.method != 'GET':
+            return self.json_response({'error': 'Method not allowed'}, status=405)
+        payload = {
+            'status': 'ok',
+            'service': 'BLT-NetGuardian',
+            'timestamp': datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
+        }
+        version = getattr(self.env, 'WORKER_VERSION', None)
+        if version:
+            payload['version'] = str(version)
+        return self.json_response(payload)
     
     async def handle_discovery_suggest(self, request):
         """Handle user-suggested targets for autonomous scanning."""
@@ -594,6 +610,8 @@ class BLTWorker:
 
     def requires_authentication(self, path: str, method: str) -> bool:
         """Protect API routes; reads can be toggled with AUTHENTICATE_READ_ENDPOINTS."""
+        if path == 'api/health' and method == 'GET':
+            return False
         if not path.startswith('api/'):
             return False
         if method in self.MUTATING_METHODS:

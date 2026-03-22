@@ -181,6 +181,14 @@ Community members can:
 
 ## API Endpoints
 
+### Health (monitoring)
+
+```
+GET /api/health
+```
+
+Returns JSON `status`, `service`, and UTC `timestamp`. **Unauthenticated** even when read APIs require `API_SECRET`, for load balancers and uptime checks. Optional `version` when `WORKER_VERSION` is set. See `API.md` for details.
+
 ### Autonomous Discovery
 
 #### Suggest a Target

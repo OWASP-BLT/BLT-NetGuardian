@@ -6,14 +6,36 @@ https://your-worker.workers.dev
 ```
 
 ## Authentication
-Currently, all endpoints are open. In production, implement authentication using:
-- API keys
-- JWT tokens
-- Cloudflare Access
+Mutating API routes (`POST`, `PUT`, `PATCH`, `DELETE`) require a valid API key when `API_SECRET` is set (`X-API-Key` or `Authorization: Bearer …`). Read routes (`GET`) require authentication by default; set `AUTHENTICATE_READ_ENDPOINTS=false` to allow unauthenticated reads (not recommended for production without other controls).
+
+**Exception:** `GET /api/health` is always unauthenticated so load balancers and uptime monitors can probe the worker without credentials.
 
 ## Endpoints
 
-### 1. Home / Web Interface
+### 1. Health / Liveness
+
+**GET /api/health**
+
+Returns a small JSON payload for monitoring. Does **not** require `API_SECRET`, even when read endpoints are authenticated.
+
+**Response (200):**
+```json
+{
+  "status": "ok",
+  "service": "BLT-NetGuardian",
+  "timestamp": "2026-03-17T12:00:00Z",
+  "version": "optional-if-WORKER_VERSION-set"
+}
+```
+
+The `version` field is present only when the `WORKER_VERSION` environment variable is configured (e.g. in Wrangler).
+
+**Errors:**
+- `405` - Method not allowed (only `GET` is supported)
+
+---
+
+### 2. Home / Web Interface
 
 **GET /**
 
@@ -23,7 +45,7 @@ Returns the main web interface HTML.
 
 ---
 
-### 2. Queue Tasks
+### 3. Queue Tasks
 
 **POST /api/tasks/queue**
 
@@ -63,7 +85,7 @@ Queue new security scanning tasks for a target.
 
 ---
 
-### 3. Register Target
+### 4. Register Target
 
 **POST /api/targets/register**
 
@@ -101,7 +123,7 @@ Register a new scan target in the system.
 
 ---
 
-### 4. Ingest Results
+### 5. Ingest Results
 
 **POST /api/results/ingest**
 
@@ -157,7 +179,7 @@ Submit scan results from security scanning agents.
 
 ---
 
-### 5. Get Job Status
+### 6. Get Job Status
 
 **GET /api/jobs/status**
 
@@ -186,7 +208,7 @@ Get the current status of a scanning job.
 
 ---
 
-### 6. List Tasks
+### 7. List Tasks
 
 **GET /api/tasks/list**
 
@@ -222,7 +244,7 @@ List all tasks for a specific job.
 
 ---
 
-### 7. Get Vulnerabilities
+### 8. Get Vulnerabilities
 
 **GET /api/vulnerabilities**
 
@@ -260,7 +282,7 @@ Query the vulnerability database.
 
 ---
 
-### 8. Dashboard
+### 9. Dashboard
 
 **GET /dashboard**
 
