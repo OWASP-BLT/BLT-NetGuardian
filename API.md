@@ -96,8 +96,19 @@ Register a new scan target in the system.
 ```
 
 **Errors:**
-- `400` - Missing required fields, invalid `target_type`, `target` too long (max 4096 characters), non-array `scan_types`, or unknown entries in `scan_types`
+- `400` - Missing required fields, invalid `target_type`, `target` too long (max 4096 characters), disallowed host/IP (see **SECURITY.md**), non-array `scan_types`, or unknown entries in `scan_types`
 - `500` - Failed to register target
+
+---
+
+### 3b. Suggest discovery target
+
+**POST /api/discovery/suggest**
+
+**Request body:** `{ "suggestion": "string (required)", "priority": boolean (optional) }`
+
+**Errors:**
+- `400` - Missing `suggestion`, invalid type, over max length, or disallowed host/IP (loopback, private IPs, cloud metadata patterns — unless `ALLOW_PRIVATE_SCAN_TARGETS=true`)
 
 ---
 

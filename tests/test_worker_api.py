@@ -31,10 +31,11 @@ from worker import BLTWorker, on_fetch  # noqa: E402
 class FakeRequest:
     """Minimal request object for worker handler tests."""
 
-    def __init__(self, url, method="GET", payload=None):
+    def __init__(self, url, method="GET", payload=None, headers=None):
         self.url = url
         self.method = method
         self._payload = payload
+        self.headers = dict(headers or {})
 
     async def json(self):
         return self._payload or {}

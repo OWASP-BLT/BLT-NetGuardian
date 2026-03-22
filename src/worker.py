@@ -24,6 +24,7 @@ from models.task import Task, TaskStatus
 from models.target import Target, TargetType
 from models.result import ScanResult
 from utils.deduplication import TaskDeduplicator
+from utils.input_validation import validate_user_target_input
 from utils.storage import JobStateStore, TaskQueueStore, TargetRegistryStore, VulnerabilityDatabase
 from scanners.coordinator import ScannerCoordinator, get_registered_task_types
 from scanners.autonomous_discovery import AutonomousDiscovery
@@ -51,6 +52,10 @@ class BLTWorker:
         self.coordinator = ScannerCoordinator()
         self.discovery = AutonomousDiscovery()
         self.notifier = ContactNotifier()
+
+    def allow_private_scan_targets(self) -> bool:
+        """Allow private/loopback targets when self-hosting (see SECURITY.md)."""
+        return self.get_boolean_env('ALLOW_PRIVATE_SCAN_TARGETS', default=False)
     
     async def handle_request(self, request):
         """Route incoming requests to appropriate handlers."""
@@ -120,10 +125,20 @@ class BLTWorker:
             suggestion = data.get('suggestion')
             priority = data.get('priority', False)
             
-            if not suggestion:
+            if suggestion is None or (isinstance(suggestion, str) and not suggestion.strip()):
                 return self.json_response({
                     'error': 'Missing required field: suggestion'
                 }, status=400)
+
+            normalized, err = validate_user_target_input(
+                suggestion,
+                max_len=self.MAX_TARGET_URL_LEN,
+                allow_private_hosts=self.allow_private_scan_targets(),
+                field_name='suggestion',
+            )
+            if err:
+                return self.json_response({'error': err}, status=400)
+            suggestion = normalized
             
             # Process the suggestion through autonomous discovery
             discovery_record = await self.discovery.process_user_suggestion(
@@ -364,10 +379,15 @@ class BLTWorker:
                     'error': 'target must be a non-empty string'
                 }, status=400)
             target = target.strip()
-            if len(target) > self.MAX_TARGET_URL_LEN:
-                return self.json_response({
-                    'error': f'target exceeds maximum length of {self.MAX_TARGET_URL_LEN} characters'
-                }, status=400)
+            normalized_target, terr = validate_user_target_input(
+                target,
+                max_len=self.MAX_TARGET_URL_LEN,
+                allow_private_hosts=self.allow_private_scan_targets(),
+                field_name='target',
+            )
+            if terr:
+                return self.json_response({'error': terr}, status=400)
+            target = normalized_target
 
             scan_types_raw = data.get('scan_types', [])
             if scan_types_raw is None:
