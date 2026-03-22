@@ -51,6 +51,11 @@ register_scanner('vulnerability_scan', Web2Crawler)  # intentionally reuses Web2
 register_scanner('penetration_test', VolunteerAgentManager)
 
 
+def get_registered_task_types() -> frozenset:
+    """Task type strings that have a scanner implementation (API validation)."""
+    return frozenset(_SCANNER_REGISTRY.keys())
+
+
 class ScannerCoordinator:
     """Coordinates all security scanning agents."""
 

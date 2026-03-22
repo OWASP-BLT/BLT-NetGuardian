@@ -21,11 +21,11 @@ except ImportError:
             self.headers = dict(headers or {})
 
 from models.task import Task, TaskStatus
-from models.target import Target
+from models.target import Target, TargetType
 from models.result import ScanResult
 from utils.deduplication import TaskDeduplicator
 from utils.storage import JobStateStore, TaskQueueStore, TargetRegistryStore, VulnerabilityDatabase
-from scanners.coordinator import ScannerCoordinator
+from scanners.coordinator import ScannerCoordinator, get_registered_task_types
 from scanners.autonomous_discovery import AutonomousDiscovery
 from scanners.contact_notifier import ContactNotifier
 
@@ -34,6 +34,8 @@ class BLTWorker:
     """Main BLT-NetGuardian Worker class - API only."""
 
     MAX_LIMIT = 100
+    MAX_TARGET_URL_LEN = 4096
+    ALLOWED_PRIORITIES = frozenset({'low', 'medium', 'high'})
     DEFAULT_ALLOWED_ORIGIN = 'https://owasp-blt.github.io'
     MUTATING_METHODS = {'POST', 'PUT', 'PATCH', 'DELETE'}
     
@@ -247,6 +249,32 @@ class BLTWorker:
                 return self.json_response({
                     'error': f"Missing required fields: {', '.join(missing_fields)}"
                 }, status=400)
+
+            if not isinstance(priority, str) or priority not in self.ALLOWED_PRIORITIES:
+                return self.json_response({
+                    'error': 'Invalid priority: must be one of low, medium, high'
+                }, status=400)
+
+            if not isinstance(task_types, list):
+                return self.json_response({
+                    'error': 'task_types must be a non-empty array of strings'
+                }, status=400)
+
+            allowed_task_types = get_registered_task_types()
+            normalized_types: List[str] = []
+            for tt in task_types:
+                if not isinstance(tt, str) or not tt.strip():
+                    return self.json_response({
+                        'error': 'Each task_types entry must be a non-empty string'
+                    }, status=400)
+                normalized_types.append(tt.strip())
+            unknown = sorted({t for t in normalized_types if t not in allowed_task_types})
+            if unknown:
+                return self.json_response({
+                    'error': f"Unknown task_types: {', '.join(unknown)}. "
+                    f"Allowed: {', '.join(sorted(allowed_task_types))}"
+                }, status=400)
+            task_types = normalized_types
             
             # Generate job ID
             job_id = self.generate_id(f"job-{target_id}-{datetime.utcnow().isoformat()}")
@@ -311,10 +339,54 @@ class BLTWorker:
             target_type = data.get('target_type')
             target = data.get('target')
             
-            if not target_type or not target:
+            if target_type is None or target is None or target_type == '' or target == '':
                 return self.json_response({
                     'error': 'Missing required fields: target_type, target'
                 }, status=400)
+
+            if not isinstance(target_type, str) or not target_type.strip():
+                return self.json_response({
+                    'error': 'target_type must be a non-empty string'
+                }, status=400)
+            target_type = target_type.strip()
+            allowed_target_types = {e.value for e in TargetType}
+            if target_type not in allowed_target_types:
+                return self.json_response({
+                    'error': f"Invalid target_type: must be one of {', '.join(sorted(allowed_target_types))}"
+                }, status=400)
+
+            if not isinstance(target, str) or not target.strip():
+                return self.json_response({
+                    'error': 'target must be a non-empty string'
+                }, status=400)
+            target = target.strip()
+            if len(target) > self.MAX_TARGET_URL_LEN:
+                return self.json_response({
+                    'error': f'target exceeds maximum length of {self.MAX_TARGET_URL_LEN} characters'
+                }, status=400)
+
+            scan_types_raw = data.get('scan_types', [])
+            if scan_types_raw is None:
+                scan_types: List[str] = []
+            elif not isinstance(scan_types_raw, list):
+                return self.json_response({
+                    'error': 'scan_types must be an array of strings'
+                }, status=400)
+            else:
+                allowed_scan = get_registered_task_types()
+                scan_types = []
+                for s in scan_types_raw:
+                    if not isinstance(s, str) or not s.strip():
+                        return self.json_response({
+                            'error': 'Each scan_types entry must be a non-empty string'
+                        }, status=400)
+                    key = s.strip()
+                    if key not in allowed_scan:
+                        return self.json_response({
+                            'error': f"Unknown scan_types: {key}. "
+                            f"Allowed: {', '.join(sorted(allowed_scan))}"
+                        }, status=400)
+                    scan_types.append(key)
             
             # Generate target ID
             target_id = self.generate_id(f"{target_type}-{target}")
@@ -324,7 +396,7 @@ class BLTWorker:
                 target_id=target_id,
                 target_type=target_type,
                 target_url=target,
-                scan_types=data.get('scan_types', []),
+                scan_types=scan_types,
                 notes=data.get('notes', ''),
                 registered_at=datetime.utcnow().isoformat()
             )
