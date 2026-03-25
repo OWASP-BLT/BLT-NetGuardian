@@ -231,6 +231,7 @@ async def test_handle_result_ingestion_updates_state_and_notifies():
     assert payload["contact_attempted"] is True
     assert payload["contact_successful"] == 2
     assert worker.vuln_db.store_vulnerability.await_count == 1
+    worker.task_queue.get_task.assert_awaited_once_with("task-1")
     worker.task_queue.update_task.assert_awaited_once()
     worker.job_store.update_job_progress.assert_awaited_once_with("job-1")
     assert worker.notifier.notify_vulnerability.await_args.kwargs["target"] == "https://example.com"
@@ -255,6 +256,55 @@ async def test_handle_result_ingestion_rejects_non_string_identifiers():
 
     assert response.status == 400
     assert payload["error"] == "Missing required fields: task_id, agent_type"
+
+
+@pytest.mark.asyncio
+async def test_handle_result_ingestion_rejects_non_object_json_payload():
+    worker = BLTWorker(SimpleNamespace(DB=None))
+
+    response = await worker.handle_result_ingestion(
+        FakeRequest(
+            "https://api.example.com/api/results/ingest",
+            method="POST",
+            payload=[1],
+        )
+    )
+    payload = parse_json(response)
+
+    assert response.status == 400
+    assert payload["error"] == "Invalid request payload"
+
+
+@pytest.mark.asyncio
+async def test_handle_result_ingestion_accepts_legacy_flat_payload():
+    worker = BLTWorker(SimpleNamespace(DB=None))
+    worker.vuln_db = SimpleNamespace(store_vulnerability=AsyncMock())
+    worker.task_queue = SimpleNamespace(
+        get_task=AsyncMock(return_value={"job_id": "job-1", "target_id": "target-1"}),
+        update_task=AsyncMock(),
+    )
+    worker.job_store = SimpleNamespace(update_job_progress=AsyncMock())
+
+    response = await worker.handle_result_ingestion(
+        FakeRequest(
+            "https://api.example.com/api/results/ingest",
+            method="POST",
+            payload={
+                "task_id": "task-1",
+                "agent_type": "static_analyzer",
+                "findings": [{"type": "check"}],
+                "vulnerabilities": [],
+            },
+        )
+    )
+    payload = parse_json(response)
+
+    assert response.status == 200
+    assert payload["success"] is True
+    assert payload["vulnerabilities_found"] == 0
+    worker.task_queue.get_task.assert_awaited_once_with("task-1")
+    worker.task_queue.update_task.assert_awaited_once()
+    worker.job_store.update_job_progress.assert_awaited_once_with("job-1")
 
 
 @pytest.mark.asyncio
